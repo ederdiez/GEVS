@@ -82,7 +82,7 @@ COLOR_AGENT_MATING = (214, 94, 194)    # magenta: in the mate cooldown (recently
 COLOR_AGENT_OUTLINE = (30, 32, 40)     # dark outline on every agent
 
 # --- Brain (neural network) ---
-# MLP: 10 inputs -> 5 hidden relu units -> 4 sigmoid outputs. Pure Python,
+# MLP: 10 inputs -> 5 hidden relu units -> 5 sigmoid outputs. Pure Python,
 # weights hand-tuned below so behavior is sensible. The brain proposes
 # intentions; the agent's body (agent.py) enforces what is inviolable.
 #
@@ -116,7 +116,7 @@ BRAIN_W_HIDDEN = [
 ]
 BRAIN_B_HIDDEN = [-0.55, -0.85, 0.70, -0.50, -0.20]
 
-# Output layer: 4 outputs (move_x, move_y, eat, rest). One row per output;
+# Output layer: 5 outputs (move_x, move_y, eat, rest, grab). One row per output;
 # columns are the 5 hidden activations followed by the 10 raw inputs
 # (skip connections, so food direction reaches movement directly).
 #   move_x, move_y:  direction, 2 * output - 1 in [-1, 1]. Seek food
@@ -142,21 +142,34 @@ BRAIN_B_HIDDEN = [-0.55, -0.85, 0.70, -0.50, -0.20]
 #   other_close (col 14): 0 everywhere, RESERVED for future training — a
 #                    linear output cannot multiply closeness x direction, so
 #                    distance modulation would need a hidden detector.
+#   grab:            pick up the food under the agent into its one-slot
+#                    inventory (the cell empties, the agent carries the
+#                    food; deposit/consume of the inventory is future work).
+#                    NOT hand-tuned: every weight is 0 and the bias is -2.0
+#                    (sigmoid(-2) ~ 0.12, far below the threshold), so
+#                    grabbing must be discovered by mutation drift over
+#                    generations — it may never emerge. A usable policy
+#                    needs pre-activation > 0, e.g. a weight ~ +2.1 on
+#                    food_close (col 10) or on h4 (food_ahead, col 4) to
+#                    fire while standing on food.
 BRAIN_W_OUT = [
     #      h0  h1  h2  h3  h4  | hunger energy night dir_x dir_y close noise oth_x oth_y oth_close
     [0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 2.4, 0.0, 0.0, 1.6,  -3.0, 0.0, 0.0],  # move_x
     [0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 2.4, 0.0, 1.6,  0.0, -3.0, 0.0],  # move_y
     [8.0, 10.0, 0.0, 0.0, 1.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0],  # eat
     [0.0, 0.0, 8.0, 8.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0],  # rest
+    [0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0],  # grab
 ]
 # Movement biases: -0.5 (was -2.0). A neutral other_dir (0.5, no neighbor)
 # contributes -3.0 * 0.5 = -1.5 to each move pre-activation, exactly the
 # amount the bias was lowered, so the solo wander envelope is unchanged.
-BRAIN_B_OUT = [-0.5, -0.5, -1.0, -1.0]
+# grab bias: -2.0, negative on purpose — see the grab row comment above.
+BRAIN_B_OUT = [-0.5, -0.5, -1.0, -1.0, -2.0]
 
 # Output thresholds: above these, the body acts on the intention.
 EAT_OUTPUT_THRESHOLD = 0.5
 REST_OUTPUT_THRESHOLD = 0.6
+GRAB_OUTPUT_THRESHOLD = 0.5
 
 # --- Genetics ---
 # Each agent owns a Genome: the brain weight tables (sim.genetics) plus

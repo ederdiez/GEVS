@@ -75,13 +75,17 @@ ventana. Contiene dos cosas:
 
 **La red propone, el cuerpo ejecuta.** Todo el comportamiento sale de una
 red neuronal (`sim/brain.py`, MLP en Python puro: 10 entradas → 5 neuronas
-ocultas relu → 4 salidas sigmoid). La red emite *intenciones*; un cuerpo
+ocultas relu → 5 salidas sigmoid). La red emite *intenciones*; un cuerpo
 (`sim/agent.py`) garantiza lo inviolable: no pisar rocas, no ocupar una
 celda ajena, comer solo donde hay comida, no moverse mientras se descansa,
 buscar pareja cuando es el momento. Así la red puede ser torpe y la
 simulación nunca se rompe. Desde la genética (ver sección siguiente), cada
 agente tiene **su propio cerebro**: los pesos vienen de su genoma, no de
-una tabla compartida.
+una tabla compartida. La salida 5ª (`grab`) no está ajustada a mano: parte
+con pesos a cero y bias −2.0, por lo que el comportamiento de acaparar
+recursos debe ser descubierto por mutación a lo largo de generaciones
+(puede no surgir nunca). El cuerpo limita el inventario a un único recurso
+por agente.
 
 ### Entradas de la red (10, normalizadas a [0,1])
 

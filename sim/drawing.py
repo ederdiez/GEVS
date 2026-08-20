@@ -51,6 +51,9 @@ def draw_agents(screen: pygame.Surface, world) -> None:
     active agents turn orange when hungry (hunger >= HUNGER_WARNING);
     agents in the mating cooldown (recently mated, or newborn) show
     magenta over any other state — watch the reproduction live.
+    An agent carrying a resource in its one-slot inventory (inventory
+    is not None) shows a small dot above the head in the resource's
+    cell color — food for now (green).
     """
     for agent in world.entities:
         # Agent.x is in cell units, always inside [cx, cx + 1): the claimed
@@ -67,6 +70,13 @@ def draw_agents(screen: pygame.Surface, world) -> None:
         else:
             color = _AGENT_STATE_COLORS[agent.state]
         pygame.draw.circle(screen, color, (px, py), cfg.AGENT_RADIUS)
+        # Carried resource: small dot above the head (cell colors map each
+        # resource type to its color, so wood/rock would show up too later).
+        if agent.inventory is not None:
+            dot = (px, py - cfg.AGENT_RADIUS - 5)
+            pygame.draw.circle(screen, cfg.COLOR_AGENT_OUTLINE, dot, 4)
+            pygame.draw.circle(screen, _CELL_COLORS.get(agent.inventory,
+                                                        cfg.COLOR_CELL_RESOURCE), dot, 3)
 
 
 _night_surf = None
