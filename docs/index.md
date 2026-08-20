@@ -29,8 +29,10 @@ Principios del proyecto:
   sin cielo: la iluminación varía con la hora).
 - ✅ **Agentes v1: cerebro NN + cuerpo** — 14 agentes cuyo comportamiento
   *completo* (movimiento, comer, descansar) sale de una red neuronal MLP
-  (7 entradas → 5 ocultas → 4 salidas) afinada a mano en `sim/config.py`.
-  Hambre + sueño, comida que se agota y reaparece, los agentes se evitan
+  (10 entradas → 5 ocultas → 4 salidas) afinada a mano en `sim/config.py`.
+  Hambre + sueño, comida que se agota y reaparece, y evitación de choques:
+  al encontrarse dos agentes se apartan (sensores de proximidad con pesos
+  negativos) y contra rocas o vecinos el cuerpo se queda firme sin temblar
   (claims: nunca dos en la misma celda).
 
 ## Hoja de ruta (idea aproximada, sin compromiso)

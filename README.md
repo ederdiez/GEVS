@@ -8,7 +8,8 @@ forman estructuras sociales emergentes.
 generados por semilla fija), ciclo día/noche con iluminación variable
 (HUD con hora) y **14 agentes cuyo comportamiento completo sale de una red
 neuronal** (MLP afinada a mano en `sim/config.py`): deambulan, comen con
-hambre, duermen de noche y se evitan entre sí.
+hambre, duermen de noche y se apartan al encontrarse (sin temblores contra
+rocas ni vecinos).
 
 Leyenda de colores de los agentes:
 

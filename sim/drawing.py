@@ -50,8 +50,11 @@ def draw_agents(screen: pygame.Surface, world) -> None:
     active agents turn orange when hungry (hunger >= HUNGER_WARNING).
     """
     for agent in world.entities:
-        px = int(agent.x * cfg.CELL_SIZE + cfg.CELL_SIZE // 2)
-        py = int(agent.y * cfg.CELL_SIZE + cfg.CELL_SIZE // 2)
+        # Agent.x is in cell units, always inside [cx, cx + 1): the claimed
+        # cell. Cell-center-to-pixel is just x * CELL_SIZE; the old
+        # `+ CELL_SIZE // 2` shifted every agent one cell down-right.
+        px = int(agent.x * cfg.CELL_SIZE)
+        py = int(agent.y * cfg.CELL_SIZE)
         pygame.draw.circle(screen, cfg.COLOR_AGENT_OUTLINE,
                            (px, py), cfg.AGENT_RADIUS + 2)
         if agent.state == "active" and agent.hunger >= cfg.HUNGER_WARNING:
@@ -102,7 +105,8 @@ def _get_font():
 def draw_hud(screen: pygame.Surface, world) -> None:
     """Draw the time-of-day HUD; call last so the night overlay never dims it."""
     font = _get_font()
-    total_min = int(round(world.hour * 60.0)) % (24 * 60)  # avoid "24:00"
+    # int() (not round()): at 23:59.5 round() -> 24:00 -> wraps to 00:00.
+    total_min = int(world.hour * 60.0) % (24 * 60)  # avoid "24:00"
     h, m = divmod(total_min, 60)
     text = f"Día {world.day}   {h:02d}:{m:02d}"
     x, y = cfg.HUD_MARGIN, cfg.HUD_MARGIN

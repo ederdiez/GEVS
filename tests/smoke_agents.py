@@ -3,10 +3,12 @@
 Runs the simulation for 9000 frames (150 simulated seconds = 2.5 days)
 and checks, every 30 frames:
   - occupied claims are 1:1 with agents (never two agents in one cell)
-  - every agent is on a walkable cell, needs in [0, 1]
+  - every agent is on a walkable, in-bounds cell, needs in [0, 1]
   - food_cells is in sync with the grid
 Plus global checks:
   - spawn is deterministic (same seed -> same positions)
+  - no agent freezes: every agent accumulated >= MIN_MOVED cells of
+    movement over the whole run (rocks and corners never trap)
   - food was eaten AND regrew (stats > 0)
   - NN behavior is sane: at full night every agent rests (or is
     critically hungry and still searching), and mean energy at night
@@ -30,6 +32,7 @@ from sim.world import World
 FRAMES = 9000          # 150 s at 60 fps = 2.5 simulated days
 DT = 1.0 / 60.0
 CHECK_EVERY = 30
+MIN_MOVED = 10.0       # min total movement (cells) per agent over the whole run
 
 
 def check(cond: bool, msg: str) -> None:
@@ -46,6 +49,9 @@ def main() -> None:
     other_spawns = [(a.cx, a.cy) for a in other.entities]
     check(spawns == other_spawns, "spawn no determinista (mismo seed -> posiciones distintas)")
 
+    moved = [0.0] * len(world.entities)      # per-agent accumulated movement
+    prev = [(a.x, a.y) for a in world.entities]
+
     night_energy, night_n = 0.0, 0
     day_energy, day_n = 0.0, 0
 
@@ -54,6 +60,11 @@ def main() -> None:
         for agent in world.entities:
             agent.update(DT)
 
+        # --- per-frame: accumulate movement (the no-freeze invariant) ---
+        for i, agent in enumerate(world.entities):
+            moved[i] += abs(agent.x - prev[i][0]) + abs(agent.y - prev[i][1])
+            prev[i] = (agent.x, agent.y)
+
         # --- structural invariants, sampled ---
         if frame % CHECK_EVERY == 0:
             check(len(world.occupied) == len(world.entities),
@@ -61,6 +72,8 @@ def main() -> None:
             for agent in world.entities:
                 check(world.occupied.get((agent.cx, agent.cy)) is agent,
                       f"frame {frame}: agente en ({agent.cx},{agent.cy}) sin su claim")
+                check(world.in_bounds(agent.cx, agent.cy),
+                      f"frame {frame}: agente fuera del mapa en ({agent.cx},{agent.cy})")
                 check(world.is_walkable(agent.cx, agent.cy),
                       f"frame {frame}: agente sobre celda no caminable")
                 check(0.0 <= agent.hunger <= 1.0 and 0.0 <= agent.energy <= 1.0,
@@ -87,6 +100,9 @@ def main() -> None:
     check(world.stats_resource_eaten > 0, "ninguna comida consumida en 150 s")
     check(world.stats_resource_regrown > 0, "ninguna comida reapareció en 150 s")
     check(night_n > 0 and day_n > 0, "no hubo frames plenamente de día o de noche")
+    for i, dist in enumerate(moved):
+        check(dist >= MIN_MOVED,
+              f"agente {i} congelado: solo {dist:.1f} celdas de movimiento en 150 s")
 
     night_mean = night_energy / night_n
     day_mean = day_energy / day_n
@@ -95,6 +111,9 @@ def main() -> None:
 
     print(f"OK: all agent invariants held over {FRAMES} frames "
           f"({world.stats_resource_eaten} eaten, {world.stats_resource_regrown} regrown)")
+    for i, dist in enumerate(moved):
+        print(f"  agent {i:2d}: moved {dist:6.1f} cells, hunger {world.entities[i].hunger:.2f}, "
+              f"energy {world.entities[i].energy:.2f}")
 
 
 if __name__ == "__main__":
