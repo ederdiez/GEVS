@@ -47,7 +47,9 @@ _AGENT_STATE_COLORS = {
 def draw_agents(screen: pygame.Surface, world) -> None:
     """Draw every agent as a circle, colored by state.
 
-    active agents turn orange when hungry (hunger >= HUNGER_WARNING).
+    active agents turn orange when hungry (hunger >= HUNGER_WARNING);
+    agents in the mating cooldown (recently mated, or newborn) show
+    magenta over any other state — watch the reproduction live.
     """
     for agent in world.entities:
         # Agent.x is in cell units, always inside [cx, cx + 1): the claimed
@@ -57,7 +59,9 @@ def draw_agents(screen: pygame.Surface, world) -> None:
         py = int(agent.y * cfg.CELL_SIZE)
         pygame.draw.circle(screen, cfg.COLOR_AGENT_OUTLINE,
                            (px, py), cfg.AGENT_RADIUS + 2)
-        if agent.state == "active" and agent.hunger >= cfg.HUNGER_WARNING:
+        if agent._mate_cooldown > 0.0:
+            color = cfg.COLOR_AGENT_MATING
+        elif agent.state == "active" and agent.hunger >= cfg.HUNGER_WARNING:
             color = cfg.COLOR_AGENT_HUNGRY
         else:
             color = _AGENT_STATE_COLORS[agent.state]
@@ -103,14 +107,17 @@ def _get_font():
 
 
 def draw_hud(screen: pygame.Surface, world) -> None:
-    """Draw the time-of-day HUD; call last so the night overlay never dims it."""
+    """Draw the time-of-day HUD and population; call last so the night
+    overlay never dims it."""
     font = _get_font()
+    x, y = cfg.HUD_MARGIN, cfg.HUD_MARGIN
     # int() (not round()): at 23:59.5 round() -> 24:00 -> wraps to 00:00.
     total_min = int(world.hour * 60.0) % (24 * 60)  # avoid "24:00"
     h, m = divmod(total_min, 60)
-    text = f"Día {world.day}   {h:02d}:{m:02d}"
-    x, y = cfg.HUD_MARGIN, cfg.HUD_MARGIN
-    shadow, s_rect = font.render(text, (0, 0, 0))
-    screen.blit(shadow, (x + s_rect.x + 1, y + s_rect.y + 1))
-    label, l_rect = font.render(text, cfg.COLOR_HUD_TEXT)
-    screen.blit(label, (x + l_rect.x, y + l_rect.y))
+    for text, offset in ((f"Día {world.day}   {h:02d}:{m:02d}", 0),
+                         (f"Población: {len(world.entities)}  "
+                          f"†{world.stats_deaths}  +{world.stats_births}", 22)):
+        shadow, s_rect = font.render(text, (0, 0, 0))
+        screen.blit(shadow, (x + s_rect.x + 1, y + offset + s_rect.y + 1))
+        label, l_rect = font.render(text, cfg.COLOR_HUD_TEXT)
+        screen.blit(label, (x + l_rect.x, y + offset + l_rect.y))

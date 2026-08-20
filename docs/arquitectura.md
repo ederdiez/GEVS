@@ -13,9 +13,10 @@ gevs_ia/
     ├── __init__.py      # Marca el paquete `sim`.
     ├── config.py        # ★ TODAS las constantes editables (tamaño, FPS, colores, pesos de la red...).
     ├── window.py        # Crea la ventana de pygame.
-    ├── world.py         # Lógica pura del mundo: grid + reloj + comida + claims (sin pygame).
+    ├── world.py         # Lógica pura del mundo: grid + reloj + comida + claims + nacimientos/muertes (sin pygame).
     ├── agent.py         # El agente: cuerpo que ejecuta las intenciones del cerebro.
-    ├── brain.py         # MLP pura en Python: las redes neuronales de los agentes.
+    ├── brain.py         # MLP pura en Python: forward de la red (máquina sin estado).
+    ├── genetics.py      # Genoma: pesos del cerebro + rasgos del cuerpo; crossover, mutación, clon.
     ├── drawing.py       # Funciones de dibujo (una función por elemento).
     └── loop.py          # Bucle principal: eventos → actualizar → dibujar.
 ```
@@ -28,7 +29,8 @@ main.py
   └─ loop.run(screen)         →  bucle infinito:
         1. eventos (cerrar ventana...)
         2. world.update(dt)   →  reloj + regrow de comida
-           + cada agente: brain.forward() + cuerpo (movimiento, comer, descansar)
+           + cada agente: brain.forward() + cuerpo (movimiento, comer, descansar, aparearse)
+           + world.end_frame() → materializa las muertes y nacimientos diferidos
         3. dibujar            ← drawing.py (5 capas, en orden)
         4. esperar al próximo frame (FPS)
 ```
@@ -63,16 +65,23 @@ ventana. Contiene dos cosas:
 | `occupied`              | `dict` `(x, y) → agent`: las celdas reclamadas (nunca dos agentes en una). |
 | `entities`              | Lista de agentes vivos en el mundo.           |
 | `rng`                   | Aleatorio determinista del mundo (seed fija): aquí vive todo el azar de la simulación. |
+| `spawn_agent(cx, cy, ...)` | Crea un agente (población inicial y nacimientos) y reclama su celda. |
+| `kill(agent)`           | Marca la baja y libera la claim al instante; la remoción se materializa en `end_frame()`. |
+| `mate(a, b)`            | Apareamiento: coste de energía, cooldown mutuo y nacimiento diferido (crossover + mutación). |
+| `end_frame()`           | Tras el bucle de agentes: baja a los muertos y coloca a los nacidos. |
+| `stats_deaths` / `stats_births` | Contadores acumulados de muertes y nacimientos (HUD). |
 
-## Los agentes v1: cerebro NN + cuerpo
+## Los agentes: cerebro NN + cuerpo
 
 **La red propone, el cuerpo ejecuta.** Todo el comportamiento sale de una
 red neuronal (`sim/brain.py`, MLP en Python puro: 10 entradas → 5 neuronas
 ocultas relu → 4 salidas sigmoid). La red emite *intenciones*; un cuerpo
 (`sim/agent.py`) garantiza lo inviolable: no pisar rocas, no ocupar una
-celda ajena, comer solo donde hay comida, no moverse mientras se descansa.
-Así la red puede ser torpe y la simulación nunca se rompe — y cuando llegue
-el entrenamiento/evolución, solo cambiarán los pesos, nunca el cuerpo.
+celda ajena, comer solo donde hay comida, no moverse mientras se descansa,
+buscar pareja cuando es el momento. Así la red puede ser torpe y la
+simulación nunca se rompe. Desde la genética (ver sección siguiente), cada
+agente tiene **su propio cerebro**: los pesos vienen de su genoma, no de
+una tabla compartida.
 
 ### Entradas de la red (10, normalizadas a [0,1])
 
@@ -83,7 +92,7 @@ Calculadas cada frame en `Agent._inputs()`:
 | 0 | `hunger`      | necesidad del agente (0–1) |
 | 1 | `energy`      | necesidad del agente (0–1) |
 | 2 | `night`       | `1 - daylight_factor` (0 = día, 1 = noche) |
-| 3 | `food_dir_x`  | dirección a la comida más cercana, `(dx+1)/2`; 0.5 si no hay en rango |
+| 3 | `food_dir_x`  | dirección a la comida más cercana, saturada a [-1,1] y normalizada `(dx+1)/2`; 0.5 si no hay en rango |
 | 4 | `food_dir_y`  | idem, eje Y |
 | 5 | `food_close`  | `1 - min(dist / FOOD_SENSE_RANGE, 1)`; 0 si no hay comida en rango |
 | 6 | `noise`       | `world.rng.random()` por frame (deambular; determinista por semilla) |
@@ -125,7 +134,9 @@ energía recupera a `ENERGY_REST_RATE = 0.035`/s y la hambre queda congelada
 energía vuelve a `REST_WAKE_ENERGY = 0.60` (enclavamiento: sin él, la
 salida `rest` tiembla en el umbral y la siesta duraría un frame). De noche
 todos duermen (luz < 0.5), a no ser que la hambre sea crítica. Comer dura
-2 s y baja la hambre 0.9; la comida reaparece a los 45 s.
+2 s y baja la hambre 0.9; la comida reaparece a los 45 s. Estas son las
+tasas **base**: cada agente las multiplica por sus rasgos hereditarios
+(sección siguiente, `TRAIT_MIN`–`TRAIT_MAX`).
 
 ### Evitación de choques
 
@@ -180,7 +191,58 @@ Perillas de afinado (todas en `config.py`): el peso de evitación (3.0),
   `DETOUR_S` (sección `# --- Agents ---`).
 - **Afinar el ritmo** → constantes de la sección `# --- Agents ---`.
 - **Lo inviolable** no se edita: lo garantiza el cuerpo (`sim/agent.py`).
-- **Probar sin abrir la ventana** → `tests/smoke_agents.py` (headless).
+- **Probar sin abrir la ventana** → `tests/smoke_agents.py` y
+  `tests/evolution_test.py` (headless).
+
+## Genética y reproducción
+
+Cada agente posee su propio **genoma** (`sim/genetics.py`): las tablas de
+pesos del cerebro más 6 **rasgos del cuerpo** — velocidad, rango de
+percepción de comida y ritmos de hambre/energía/comer/descansar — que
+multiplican las tasas base de `config.py`. La población inicial nace de
+las tablas afinadas ± ruido pequeño (`INITIAL_WEIGHT_NOISE`,
+`INITIAL_TRAIT_NOISE`). El genoma es la **única unidad de herencia**:
+crossover, mutación y clon operan solo sobre él. El `Brain` es una máquina
+de forward sin estado hereditario: solo lee las tablas de su genoma, y
+como `crossover`/`mutate` son puros (devuelven un genoma nuevo, nunca
+tocan al padre), compartir referencias es inofensivo.
+
+- **Herencia (sexual por encuentro).** Dos agentes elegibles (energía ≥
+  `MATE_ENERGY_THRESHOLD`, hambre ≤ `MATE_HUNGER_MAX`, fuera de cooldown)
+  a distancia Manhattan ≤ `MATE_RANGE` se buscan mutuamente: el reflejo de
+  pareja vive en el **cuerpo** y sobreescribe la evitación de la red — el
+  mismo patrón "cuerpo inviolable" que el food rush, sin tocar la
+  topología 10→5→4 ni los pesos afinados (la **entrada 9 del cerebro
+  sigue reservada**). A distancia 1 se aparean: cada padre paga
+  `MATE_ENERGY_COST`, ambos entran en `MATE_COOLDOWN_S` (el primer
+  apareamiento de un frame fija el cooldown de ambos, así que una pareja
+  nunca produce doble nacimiento) y el hijo hereda por **crossover
+  uniforme por gen** (p = 0.5) + **mutación** — pesos: aditiva gaussiana
+  con clamp; rasgos: log-normal (mantiene la positividad), ambos
+  clampeados a sus límites. El vector hacia la pareja se **normaliza**
+  por distancia Manhattan: un delta crudo de 2 celdas por sub-paso
+  violaría el invariante `AGENT_STEP_S · speed < 1` y saltaría claims.
+- **El nacimiento.** El hijo se coloca en una celda libre adyacente
+  (orden fijo y determinista: 4-vecindad primero, luego diagonales) con
+  `CHILD_INITIAL_HUNGER`/`CHILD_INITIAL_ENERGY`, `generation = max(padres)
+  + 1`, sus `parents` registrados y su propio cooldown de "infancia"
+  (también una mitigación barata del incesto padre-hijo). Si no hay celda
+  libre o la población está en `MAX_POPULATION`, el apareamiento aborta
+  sin coste ni cooldown y el reflejo reintenta solo mientras sigan
+  adyacentes.
+- **Muerte.** `hunger ≥ 1.0`, `energy ≤ 0.0` o `age ≥ MAX_AGE_S`.
+  `world.kill()` marca la baja y libera la claim al instante; la remoción
+  de `entities` se materializa en `world.end_frame()` — nunca se muta la
+  lista en medio del bucle de agentes (`loop.py` llama a `end_frame` tras
+  el bucle; los tests hacen lo mismo). Las bajas se procesan antes que los
+  nacimientos; si el spot del nacimiento se escapó entre `mate()` y
+  `end_frame`, se re-busca y, si no queda sitio, se descarta el nacimiento
+  (raro, documentado).
+
+**Determinismo:** todo el azar — ruido inicial, crossover, mutación y el
+noise del cerebro — sale del `rng` del mundo, así que una semilla
+reproduce la misma trayectoria evolutiva (`tests/smoke_agents.py` lo
+comprueba con dos mundos pisados lado a lado).
 
 ## El dibujo (`sim/drawing.py`)
 
@@ -188,10 +250,13 @@ Una función por elemento, y el bucle las llama en este orden (importa):
 
 1. `draw_background` — suelo, con color interpolado según la hora.
 2. `draw_world` — obstáculos y recursos (celdas no vacías).
-3. `draw_agents` — un círculo por agente (color según estado, ver leyenda abajo).
+3. `draw_agents` — un círculo por agente (color según estado: comiendo
+   verde, descansando azul, hambriento naranja, apareándose **magenta**
+   (cooldown de apareamiento, recién apareado o recién nacido), activo gris).
 4. `draw_night_overlay` — oscurece el mundo de noche (surface translúcida);
    los agentes se oscurecen con el mundo (dormidos de noche, coherente).
-5. `draw_hud` — reloj "Día N  HH:MM" (siempre legible, encima del overlay).
+5. `draw_hud` — "Día N  HH:MM" y "Población: N  †muertes  +nacimientos"
+   (siempre legible, encima del overlay).
 
 > **Perspectiva:** la vista es top-down pura (el mundo se ve desde arriba),
 > así que no hay cielo: la luz del día se transmite solo con la
@@ -216,6 +281,10 @@ Una función por elemento, y el bucle las llama en este orden (importa):
 | Número de agentes, velocidad, ritmos de hambre/energía | sección `# --- Agents ---` en `sim/config.py`. |
 | Evitación: rango del sensor, re-sondeo y rodeo de rocas | `AGENT_SENSE_RANGE` / `BLOCKED_PROBE_S` / `DETOUR_S` en `sim/config.py`. |
 | El comportamiento de los agentes (pesos de la red) | matrices de la sección `# --- Brain ---` en `sim/config.py`. |
+| Genética (ruido inicial, mutación, clamps) | sección `# --- Genetics ---` en `sim/config.py`. |
+| Reproducción (umbrales, cooldown, coste, rango) | sección `# --- Reproduction ---` en `sim/config.py`. |
+| Muerte y tope de población | `MAX_AGE_S` / `MAX_POPULATION` en `sim/config.py`. |
+| El genoma (crossover/mutación/clon) | `sim/genetics.py`.                    |
 | Lo que un agente puede/cómo se mueve | `sim/agent.py` (el cuerpo).         |
 | Las señales que la red recibe | `Agent._inputs()` en `sim/agent.py`. |
 | Cómo se dibuja algo      | `sim/drawing.py` (añade una función).   |

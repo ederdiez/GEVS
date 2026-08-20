@@ -29,10 +29,13 @@ def run(screen: pygame.Surface) -> None:
             if event.type == pygame.QUIT:
                 running = False
 
-        # 2. Update the world (clock, food regrowth), then each agent (brain + body)
+        # 2. Update the world (clock, food regrowth), then each agent
+        #    (brain + body). Deferred deaths/births materialize in
+        #    end_frame, never while the loop is iterating entities.
         world.update(dt)
         for agent in world.entities:
             agent.update(dt)
+        world.end_frame()
 
         # 3. Draw everything (HUD last so the night overlay never dims it).
         #    Agents sit between the world and the night overlay: at night the

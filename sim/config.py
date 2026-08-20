@@ -74,6 +74,7 @@ COLOR_AGENT_WANDER = (200, 200, 210)   # active, not hungry
 COLOR_AGENT_HUNGRY = (232, 152, 64)    # active, hunger >= HUNGER_WARNING
 COLOR_AGENT_EATING = (72, 190, 120)    # eating (green, like the food)
 COLOR_AGENT_RESTING = (92, 132, 226)   # resting / sleeping (blue)
+COLOR_AGENT_MATING = (214, 94, 194)    # magenta: in the mate cooldown (recently mated / newborn)
 COLOR_AGENT_OUTLINE = (30, 32, 40)     # dark outline on every agent
 
 # --- Brain (neural network) ---
@@ -146,3 +147,30 @@ BRAIN_B_OUT = [-0.5, -0.5, -1.0, -1.0]
 # Output thresholds: above these, the body acts on the intention.
 EAT_OUTPUT_THRESHOLD = 0.5
 REST_OUTPUT_THRESHOLD = 0.6
+
+# --- Genetics ---
+# Each agent owns a Genome: the brain weight tables (sim.genetics) plus
+# body traits (multipliers ~1.0 over the base rates above). The initial
+# population is born from the hand-tuned tables with small noise.
+INITIAL_WEIGHT_NOISE = 0.02   # sigma gaussiana del ruido inicial en pesos
+INITIAL_TRAIT_NOISE = 0.05    # sigma gaussiana del ruido inicial en rasgos
+WEIGHT_MUTATION_RATE = 0.05   # probabilidad de mutar cada peso (por gen)
+WEIGHT_MUTATION_SIGMA = 0.20  # sigma de la mutación aditiva de pesos
+WEIGHT_CLAMP = 20.0           # pesos acotados a [-WEIGHT_CLAMP, +WEIGHT_CLAMP]
+TRAIT_MUTATION_RATE = 0.20    # probabilidad de mutar cada rasgo
+TRAIT_MUTATION_SIGMA = 0.05   # sigma multiplicativa (log-normal) de rasgos
+TRAIT_MIN = 0.5               # límite inferior del multiplicador de rasgo
+TRAIT_MAX = 2.0               # límite superior
+
+# --- Death and population ---
+MAX_AGE_S = 180.0             # s; death by old age (3 simulated days)
+MAX_POPULATION = 60           # safety cap on the living population
+
+# --- Reproduction ---
+MATE_ENERGY_THRESHOLD = 0.60  # min energy to be eligible to mate
+MATE_HUNGER_MAX = 0.50        # max hunger to be eligible to mate
+MATE_COOLDOWN_S = 15.0        # s of waiting after mating (also the child's "infancy")
+MATE_RANGE = 2.0              # cells; mate reflex seeks partners within this radius
+MATE_ENERGY_COST = 0.25       # energy paid by EACH parent (threshold 0.6 - cost 0.25 -> never negative)
+CHILD_INITIAL_ENERGY = 0.60   # the child's starting energy
+CHILD_INITIAL_HUNGER = 0.30   # the child's starting hunger

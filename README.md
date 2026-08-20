@@ -6,10 +6,14 @@ forman estructuras sociales emergentes.
 
 **Estado actual:** mundo 2D con grid en vista top-down (rocas y recursos
 generados por semilla fija), ciclo día/noche con iluminación variable
-(HUD con hora) y **14 agentes cuyo comportamiento completo sale de una red
-neuronal** (MLP afinada a mano en `sim/config.py`): deambulan, comen con
+(HUD con hora y población) y agentes cuyo comportamiento completo sale de
+una red neuronal **propia por individuo** (cada agente tiene su genoma:
+pesos de la red + rasgos físicos hereditarios). Deambulan, comen con
 hambre, duermen de noche y se apartan al encontrarse (sin temblores contra
-rocas ni vecinos).
+rocas ni vecinos). **Nacen, se reproducen y mueren**: dos agentes con
+energía suficiente y a distancia corta se aparean (crossover + mutación
+del genoma); el hambre, el agotamiento o la vejez los matan, y la
+población fluctúa bajo un tope de seguridad.
 
 Leyenda de colores de los agentes:
 
@@ -18,6 +22,7 @@ Leyenda de colores de los agentes:
 | 🟢 verde   | comiendo |
 | 🔵 azul    | descansando / durmiendo |
 | 🟠 naranja | activo y con hambre |
+| 🟣 magenta | en cooldown de apareamiento (recién apareado o recién nacido) |
 | ⚪ gris    | activo, sin hambre |
 
 ## Requisitos

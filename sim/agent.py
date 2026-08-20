@@ -12,17 +12,39 @@ are no programmed behaviors here.
 import math
 
 from sim import config as cfg
-from sim.brain import BRAIN
+from sim.genetics import Genome
 
 
 class Agent:
     """One individual. Position is in cell units: x, y are floats
     (smooth movement), cx, cy are the integer cell the agent occupies."""
 
-    def __init__(self, world, cx: int, cy: int):
+    def __init__(self, world, cx: int, cy: int, genome=None, generation=0,
+                 parents=None):
         self.world = world
         self.cx, self.cy = cx, cy
         self.x, self.y = float(cx) + 0.5, float(cy) + 0.5  # start at cell center
+
+        # Genome: brain weight tables + body traits. The initial population
+        # is born from the hand-tuned config tables with small noise.
+        self.genome = genome if genome is not None else Genome.random_initial(world.rng)
+        self.brain = self.genome.build_brain()
+        self.generation = generation
+        self.parents = parents            # (genome_a, genome_b) or None (initial pop)
+
+        # Body traits: multipliers ~1.0 over the config base rates, resolved
+        # to plain attributes here (no dynamic setattr; base values come from
+        # config — no magic numbers).
+        t = self.genome.traits
+        self.speed = cfg.AGENT_SPEED * t["speed"]
+        self.food_sense_range = cfg.FOOD_SENSE_RANGE * t["food_sense"]
+        self.hunger_rate = cfg.HUNGER_RATE * t["hunger_rate"]
+        self.energy_drain_rate = cfg.ENERGY_DRAIN_RATE * t["energy_drain"]
+        self.eat_rate = cfg.EAT_RATE * t["eat_rate"]
+        self.rest_rate = cfg.ENERGY_REST_RATE * t["rest_rate"]
+        self.age_s = 0.0
+        self.alive = True
+        self._mate_cooldown = 0.0
 
         # Needs (0-1). Initial values staggered so agents wake at different
         # times of the morning instead of all at once.
@@ -61,15 +83,20 @@ class Agent:
         """The 10 normalized inputs the brain reads (order matches config)."""
         world = self.world
         dx, dy, dist = self._food_dir()
-        food_close = 1.0 - min(dist / cfg.FOOD_SENSE_RANGE, 1.0) if dist is not None else 0.0
+        food_close = 1.0 - min(dist / self.food_sense_range, 1.0) if dist is not None else 0.0
         odx, ody, odist = self._other_agent()
         other_close = 1.0 - min(odist / cfg.AGENT_SENSE_RANGE, 1.0) if odist is not None else 0.0
         return [
             self.hunger,
             self.energy,
             1.0 - world.daylight_factor,
-            (dx + 1.0) / 2.0 if dx is not None else 0.5,
-            (dy + 1.0) / 2.0 if dy is not None else 0.5,
+            # Direction sensors saturate to [-1, 1] before the (dx+1)/2
+            # normalization: a food cell up to FOOD_SENSE_RANGE away makes
+            # dx as large as ±8, which would push the input to ±4.5 and
+            # amplify any genetic weight noise out of proportion (the
+            # night-sleep margin broke under initial noise without this).
+            (max(-1.0, min(1.0, dx)) + 1.0) / 2.0 if dx is not None else 0.5,
+            (max(-1.0, min(1.0, dy)) + 1.0) / 2.0 if dy is not None else 0.5,
             food_close,
             world.rng.random(),  # noise: wandering without breaking the seed
             (odx + 1.0) / 2.0 if odx is not None else 0.5,
@@ -92,7 +119,7 @@ class Agent:
             if owner is not None and owner is not self:
                 continue
             dist = abs(fx - self.cx) + abs(fy - self.cy)
-            if dist > cfg.FOOD_SENSE_RANGE:
+            if dist > self.food_sense_range:
                 continue
             if best is None or dist < best[2]:
                 best = (fx - self.cx, fy - self.cy, dist)
@@ -116,11 +143,44 @@ class Agent:
                 best = (other.cx - self.cx, other.cy - self.cy, dist)
         return best if best is not None else (None, None, None)
 
+    def _mate_eligible(self) -> bool:
+        """Eligible to mate: alive, off cooldown, fed and rested enough.
+
+        This drive lives in the body, not the brain: adding mate inputs
+        would break the 10->5->4 topology and the hand-tuned weights
+        (input 9 stays RESERVED, config.py).
+        """
+        return (self.alive and self._mate_cooldown <= 0.0
+                and self.energy >= cfg.MATE_ENERGY_THRESHOLD
+                and self.hunger <= cfg.MATE_HUNGER_MAX
+                and self.eat_timer <= 0.0 and not self._resting)
+
+    def _mate_dir(self):
+        """Nearest eligible partner (Manhattan) within MATE_RANGE.
+
+        Returns (other, dx, dy, dist) or (None, None, None, None). A pure
+        function of positions and attributes, like _other_agent: no new
+        randomness, so determinism is preserved. Filters on
+        other._mate_eligible().
+        """
+        best = None
+        for other in self.world.entities:
+            if other is self or not other._mate_eligible():
+                continue
+            dist = abs(other.cx - self.cx) + abs(other.cy - self.cy)
+            if dist > cfg.MATE_RANGE:
+                continue
+            if best is None or dist < best[2]:
+                best = (other, other.cx - self.cx, other.cy - self.cy, dist)
+        return best if best is not None else (None, None, None, None)
+
     # -- body --
 
     def update(self, dt: float) -> None:
         """Think (brain) and act (body) for dt real seconds."""
-        self.move_x, self.move_y, self.eat_out, self.rest_out = BRAIN.forward(self._inputs())
+        self.age_s += dt
+        self._mate_cooldown = max(0.0, self._mate_cooldown - dt)
+        self.move_x, self.move_y, self.eat_out, self.rest_out = self.brain.forward(self._inputs())
 
         # Survival reflex (below the brain, like biology): starving agents
         # never stop to rest — keep searching for food.
@@ -140,7 +200,7 @@ class Agent:
         # Eating takes precedence over resting.
         if self.eat_timer > 0:
             self.eat_timer -= dt
-            self.hunger = max(0.0, self.hunger - cfg.EAT_RATE * dt)
+            self.hunger = max(0.0, self.hunger - self.eat_rate * dt)
         elif self.eat_out > cfg.EAT_OUTPUT_THRESHOLD and \
                 self.world.cell_type(self.cx, self.cy) == cfg.CELL_RESOURCE:
             self.world.consume_resource(self.cx, self.cy)
@@ -154,10 +214,10 @@ class Agent:
         if self.eat_timer > 0:
             pass  # energy frozen while eating
         elif resting:
-            self.energy = min(1.0, self.energy + cfg.ENERGY_REST_RATE * dt)
+            self.energy = min(1.0, self.energy + self.rest_rate * dt)
         else:
-            self.hunger = min(1.0, self.hunger + cfg.HUNGER_RATE * dt)
-            self.energy = max(0.0, self.energy - cfg.ENERGY_DRAIN_RATE * dt)
+            self.hunger = min(1.0, self.hunger + self.hunger_rate * dt)
+            self.energy = max(0.0, self.energy - self.energy_drain_rate * dt)
 
         # Movement (suppressed while eating or resting). An active detour
         # overrides the brain's direction with a slide along the tangent
@@ -176,6 +236,18 @@ class Agent:
                 # _food_dir already returns deltas (food - cell), so the
                 # rush direction is just that delta.
                 dx, dy = float(fd_dx), float(fd_dy)
+            # Mate reflex (see _mate_eligible/_mate_dir): an eligible
+            # partner in MATE_RANGE overrides the brain's movement, the
+            # same "inviolable body" pattern as the food rush. The
+            # direction is NORMALIZED by Manhattan distance so no single
+            # sub-step crosses more than one cell boundary (a raw delta
+            # of 2 would skip a claim at AGENT_STEP_S * speed > 1).
+            if self._mate_eligible():
+                mate, mdx, mdy, mdist = self._mate_dir()
+                if mate is not None and mdist <= 1.0:
+                    self.world.mate(self, mate)      # adjacent: mate now
+                elif mate is not None and mdist <= cfg.MATE_RANGE:
+                    dx, dy = mdx / mdist, mdy / mdist
             if self._detour_timer > 0.0:
                 self._detour_timer = max(0.0, self._detour_timer - dt)
                 if self._detour_retreat:
@@ -193,8 +265,8 @@ class Agent:
             dt_left = dt
             while dt_left > 1e-9:
                 step = min(dt_left, cfg.AGENT_STEP_S)
-                self._move_axis(dx * step * cfg.AGENT_SPEED, 0.0, step)
-                self._move_axis(0.0, dy * step * cfg.AGENT_SPEED, step)
+                self._move_axis(dx * step * self.speed, 0.0, step)
+                self._move_axis(0.0, dy * step * self.speed, step)
                 dt_left -= step
 
         # Derived state for drawing and tests.
@@ -204,6 +276,12 @@ class Agent:
             self.state = "resting"
         else:
             self.state = "active"
+
+        # Death: starvation (hunger >= 1.0), exhaustion (energy <= 0), or
+        # old age. Deferred: world.kill only marks the agent; the removal
+        # happens in world.end_frame() after the agent loop.
+        if self.hunger >= 1.0 or self.energy <= 0.0 or self.age_s >= cfg.MAX_AGE_S:
+            self.world.kill(self)
 
     def _move_axis(self, dx_units: float, dy_units: float, dt_step: float) -> None:
         """Move dx/dy cell units on one axis, claiming the new cell or

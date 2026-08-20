@@ -6,13 +6,13 @@ sim.config (hand-tuned, readable tables); this module only does the
 forward pass. See config.py `# --- Brain ---` for the meaning of every
 unit and every weight.
 
-Every agent shares one instance (BRAIN), so tuning the brain = editing
-config tables, never code.
+Each agent builds its own Brain from its Genome's weight tables
+(sim.genetics). The brain is a stateless forward machine: forward()
+only reads the tables it was given, so a table can be shared by several
+brains without risk.
 """
 
 import math
-
-from sim import config as cfg
 
 
 def _relu(v: float) -> float:
@@ -23,7 +23,7 @@ def _sigmoid(v: float) -> float:
     return 1.0 / (1.0 + math.exp(-v))
 
 
-class MLP:
+class Brain:
     """One hidden layer (relu) + one output layer (sigmoid).
 
     The output layer also receives the raw inputs (skip connections),
@@ -49,7 +49,3 @@ class MLP:
             for row, b in zip(self.w_out, self.b_out)
         ]
         return outputs
-
-
-# The one brain every agent uses. Build it once from the config tables.
-BRAIN = MLP(cfg.BRAIN_W_HIDDEN, cfg.BRAIN_B_HIDDEN, cfg.BRAIN_W_OUT, cfg.BRAIN_B_OUT)
