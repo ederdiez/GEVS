@@ -78,9 +78,19 @@ class Agent:
         ]
 
     def _food_dir(self):
-        """Nearest food cell by Manhattan distance; (dx, dy, dist) or (None, None, None)."""
+        """Nearest food cell by Manhattan distance; (dx, dy, dist) or (None, None, None).
+
+        A food cell already claimed by another agent is skipped: when two
+        agents race for the same food, whoever reaches the cell first keeps
+        it as a target, and the other re-targets the next nearest food
+        instead of piling up next to it in a polite hold. The agent's own
+        claim is kept, so standing on food still counts as eating it.
+        """
         best = None
         for fx, fy in self.world.food_cells:
+            owner = self.world.occupied.get((fx, fy))
+            if owner is not None and owner is not self:
+                continue
             dist = abs(fx - self.cx) + abs(fy - self.cy)
             if dist > cfg.FOOD_SENSE_RANGE:
                 continue
@@ -155,6 +165,17 @@ class Agent:
         if not resting and self.eat_timer <= 0:
             dx = 2.0 * self.move_x - 1.0
             dy = 2.0 * self.move_y - 1.0
+            # Food rush: the nearest food is one cell away and free — go
+            # for it. The brain's other-agent avoidance (negative weight
+            # on other_dir) repels two agents racing for the same food
+            # before either reaches it, so without this they oscillate
+            # forever around the cell. The racer wins the cell claim; the
+            # loser (its food now occupied) re-targets next frame.
+            fd_dx, fd_dy, fdist = self._food_dir()
+            if fdist == 1:
+                # _food_dir already returns deltas (food - cell), so the
+                # rush direction is just that delta.
+                dx, dy = float(fd_dx), float(fd_dy)
             if self._detour_timer > 0.0:
                 self._detour_timer = max(0.0, self._detour_timer - dt)
                 if self._detour_retreat:
