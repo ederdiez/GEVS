@@ -19,8 +19,11 @@ python3 -m venv .venv
 ```
 
 Se abre una ventana de 800×600 con un mundo de celdas (rocas en gris,
-recursos en verde) y un ciclo día/noche de 60 segundos. Para salir, cierra
-la ventana (botón X) o pulsa `Ctrl+C` en la terminal.
+recursos en verde), un ciclo día/noche de 60 segundos y agentes circulares
+que deambulan de día, comen al encontrar comida y duermen de noche (su
+comportamiento sale de una red neuronal; los colores se explican en el
+`README`). Para salir, cierra la ventana (botón X) o pulsa `Ctrl+C` en la
+terminal.
 
 ## Problemas comunes
 

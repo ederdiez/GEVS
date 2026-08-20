@@ -5,8 +5,19 @@ El objetivo a largo plazo es simular agentes que interactúan entre sí y
 forman estructuras sociales emergentes.
 
 **Estado actual:** mundo 2D con grid en vista top-down (rocas y recursos
-generados por semilla fija) y ciclo día/noche con iluminación variable
-(HUD con hora). La simulación de agentes se añadirá sobre esta base.
+generados por semilla fija), ciclo día/noche con iluminación variable
+(HUD con hora) y **14 agentes cuyo comportamiento completo sale de una red
+neuronal** (MLP afinada a mano en `sim/config.py`): deambulan, comen con
+hambre, duermen de noche y se evitan entre sí.
+
+Leyenda de colores de los agentes:
+
+| Color | Estado |
+| ----- | ------ |
+| 🟢 verde   | comiendo |
+| 🔵 azul    | descansando / durmiendo |
+| 🟠 naranja | activo y con hambre |
+| ⚪ gris    | activo, sin hambre |
 
 ## Requisitos
 

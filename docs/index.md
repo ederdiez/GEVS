@@ -27,14 +27,19 @@ Principios del proyecto:
 - ✅ **Ciclo día/noche** — un día simulado cada 60 s reales: colores que se
   interpolan suavemente, overlay nocturno e HUD con hora (vista top-down,
   sin cielo: la iluminación varía con la hora).
-- ⏳ **Agentes** — siguiente paso: entidades con posición y movimiento.
+- ✅ **Agentes v1: cerebro NN + cuerpo** — 14 agentes cuyo comportamiento
+  *completo* (movimiento, comer, descansar) sale de una red neuronal MLP
+  (7 entradas → 5 ocultas → 4 salidas) afinada a mano en `sim/config.py`.
+  Hambre + sueño, comida que se agota y reaparece, los agentes se evitan
+  (claims: nunca dos en la misma celda).
 
 ## Hoja de ruta (idea aproximada, sin compromiso)
 
-1. **Agentes** — entidades con posición, movimiento y estado (`sim/agent.py`),
-   moviéndose por el grid usando `is_walkable` / `cell_type`.
-2. **Comportamientos** — REDES NEURONALES.
-3. **Interacción** — comunicación y memoria entre agentes.
+1. ✅ **Agentes v1** — la red neuronal ya controla el comportamiento y el
+   movimiento (MLP con capa oculta, pesos editables en `config.py`).
+2. **Entrenar / evolucionar los pesos** — en vez de afinar a mano, que los
+   pesos aprendan (evolución, gradiente o búsqueda); el cuerpo no cambia.
+3. **Memoria e interacción** — comunicación y recuerdos entre agentes.
 4. **Sociedades** — estructuras emergentes visibles en pantalla.
 
 ## Índice

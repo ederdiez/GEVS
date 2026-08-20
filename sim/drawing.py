@@ -37,6 +37,30 @@ def draw_world(screen: pygame.Surface, world) -> None:
                 pygame.draw.rect(screen, color, (x * size, y * size, size, size))
 
 
+_AGENT_STATE_COLORS = {
+    "eating": cfg.COLOR_AGENT_EATING,
+    "resting": cfg.COLOR_AGENT_RESTING,
+    "active": cfg.COLOR_AGENT_WANDER,
+}
+
+
+def draw_agents(screen: pygame.Surface, world) -> None:
+    """Draw every agent as a circle, colored by state.
+
+    active agents turn orange when hungry (hunger >= HUNGER_WARNING).
+    """
+    for agent in world.entities:
+        px = int(agent.x * cfg.CELL_SIZE + cfg.CELL_SIZE // 2)
+        py = int(agent.y * cfg.CELL_SIZE + cfg.CELL_SIZE // 2)
+        pygame.draw.circle(screen, cfg.COLOR_AGENT_OUTLINE,
+                           (px, py), cfg.AGENT_RADIUS + 2)
+        if agent.state == "active" and agent.hunger >= cfg.HUNGER_WARNING:
+            color = cfg.COLOR_AGENT_HUNGRY
+        else:
+            color = _AGENT_STATE_COLORS[agent.state]
+        pygame.draw.circle(screen, color, (px, py), cfg.AGENT_RADIUS)
+
+
 _night_surf = None
 
 
