@@ -22,14 +22,15 @@ Principios del proyecto:
 - ✅ Repositorio git inicializado, `.gitignore` completo.
 - ✅ Ventana pygame funcional (800×600, 60 FPS, cierre limpio).
 - ✅ **Mundo 2D con grid** — 40×30 celdas generadas por semilla fija:
-  suelo, obstáculos (rocas) y recursos (comida). Lógica pura en
+  suelo, rocas, madera y recursos (comida). Lógica pura en
   `sim/world.py`, testeable sin ventana.
 - ✅ **Ciclo día/noche** — un día simulado cada 60 s reales: colores que se
   interpolan suavemente, overlay nocturno e HUD con hora (vista top-down,
   sin cielo: la iluminación varía con la hora).
 - ✅ **Agentes: cerebro NN + cuerpo** — agentes cuyo comportamiento
-  *completo* (movimiento, comer, descansar) sale de una red neuronal MLP
-  (10 entradas → 5 ocultas → 4 salidas) afinada a mano en `sim/config.py`,
+  *completo* (movimiento, comer, descansar, recoger) sale de una red
+  neuronal MLP (10 entradas → 5 ocultas → 5 salidas) afinada a mano en
+  `sim/config.py`,
   con un **genoma propio por individuo**. Hambre + sueño, comida que se
   agota y reaparece, y evitación de choques: al encontrarse dos agentes se
   apartan (sensores de proximidad con pesos negativos) y contra rocas o

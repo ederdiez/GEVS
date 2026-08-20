@@ -19,11 +19,11 @@ python3 -m venv .venv
 ```
 
 Se abre una ventana de 800×600 con un mundo de celdas (rocas en gris,
-recursos en verde), un ciclo día/noche de 60 segundos y agentes circulares
-que deambulan de día, comen al encontrar comida y duermen de noche (su
-comportamiento sale de una red neuronal; los colores se explican en el
-`README`). Para salir, cierra la ventana (botón X) o pulsa `Ctrl+C` en la
-terminal.
+madera en marrón, recursos en verde), un ciclo día/noche de 60 segundos y
+agentes circulares que deambulan de día, comen al encontrar comida y
+duermen de noche (su comportamiento sale de una red neuronal; los colores
+se explican en el `README`). Para salir, cierra la ventana (botón X) o
+pulsa `Ctrl+C` en la terminal.
 
 ## Problemas comunes
 
@@ -53,4 +53,4 @@ bibliotecas SDL completas (`pacman -S sdl2_ttf sdl2_image sdl2_mixer` y
 ### Quiero cambiar el tamaño o los colores
 
 Abre `sim/config.py` y edita `WINDOW_WIDTH`, `WINDOW_HEIGHT`,
-`COLOR_FLOOR_DAY`, `COLOR_CELL_OBSTACLE`, etc. Todo lo ajustable está ahí.
+`COLOR_FLOOR_DAY`, `COLOR_CELL_ROCK`, etc. Todo lo ajustable está ahí.

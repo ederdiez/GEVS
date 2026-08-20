@@ -4,16 +4,18 @@ Simulación visual de sociedades inteligentes construida con **Python + pygame**
 El objetivo a largo plazo es simular agentes que interactúan entre sí y
 forman estructuras sociales emergentes.
 
-**Estado actual:** mundo 2D con grid en vista top-down (rocas y recursos
-generados por semilla fija), ciclo día/noche con iluminación variable
-(HUD con hora y población) y agentes cuyo comportamiento completo sale de
-una red neuronal **propia por individuo** (cada agente tiene su genoma:
-pesos de la red + rasgos físicos hereditarios). Deambulan, comen con
-hambre, duermen de noche y se apartan al encontrarse (sin temblores contra
-rocas ni vecinos). **Nacen, se reproducen y mueren**: dos agentes con
-energía suficiente y a distancia corta se aparean (crossover + mutación
-del genoma); el hambre, el agotamiento o la vejez los matan, y la
-población fluctúa bajo un tope de seguridad.
+**Estado actual:** mundo 2D con grid en vista top-down (rocas, madera y
+recursos generados por semilla fija), ciclo día/noche con iluminación
+variable (HUD con hora y población) y agentes cuyo comportamiento completo
+sale de una red neuronal **propia por individuo** (cada agente tiene su
+genoma: pesos de la red + rasgos físicos hereditarios). Deambulan, comen
+con hambre, duermen de noche, se apartan al encontrarse (sin temblores
+contra rocas ni vecinos) y pueden **recoger comida** en un inventario de
+una ranura (punto sobre la cabeza mientras la llevan). **Nacen, se
+reproducen y mueren**: dos agentes con energía suficiente y a distancia
+corta se aparean (crossover + mutación del genoma); el hambre, el
+agotamiento o la vejez los matan, y la población fluctúa bajo un tope de
+seguridad.
 
 Leyenda de colores de los agentes:
 

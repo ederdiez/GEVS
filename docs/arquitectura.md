@@ -41,9 +41,13 @@ main.py
 ventana. Contiene dos cosas:
 
 - **El grid** `grid[y][x]` (filas primero), un tablero de 40×30 celdas de
-  20 px. Cada celda es un entero: `CELL_EMPTY` (0), `CELL_OBSTACLE` (1)
-  (rocas, muros) o `CELL_RESOURCE` (2) (comida). Se genera de forma
-  procedimental con una semilla fija (`WORLD_SEED = 42`): mismo seed,
+  20 px. Cada celda es un entero: `CELL_EMPTY` (0), `CELL_BORDER` (1)
+  (solo los límites del mundo, nunca una celda del grid), `CELL_RESOURCE`
+  (2) (comida, verde), `CELL_ROCK` (3) (roca, colisionable) y `CELL_WOOD`
+  (4) (madera, colisionable). Se genera de forma procedimental con una
+  semilla fija (`WORLD_SEED = 42`) en tres pasadas sobre celdas vacías:
+  primero rocas (`ROCK_DENSITY = 0.08`), luego madera (`WOOD_DENSITY =
+  0.04`) y por último comida (`RESOURCE_DENSITY = 0.04`). Mismo seed,
   mismo mundo.
 - **El reloj simulado** `time_sim`: un día dura `DAY_LENGTH_S = 60` segundos
   reales. Desde él se derivan `hour` (0–24 h) y `daylight_factor` (0 =
@@ -53,8 +57,8 @@ ventana. Contiene dos cosas:
 
 | Método / atributo       | Qué hace / devuelve                           |
 | ----------------------- | --------------------------------------------- |
-| `is_walkable(x, y)`     | `True` si la celda está en el mundo y no es obstáculo. |
-| `cell_type(x, y)`       | Tipo de celda (fuera de límites = obstáculo). |
+| `is_walkable(x, y)`     | `True` si la celda está en el mundo y no es roca ni madera (la comida sí es caminable). |
+| `cell_type(x, y)`       | Tipo de celda (fuera de límites = borde del mundo). |
 | `hour`                  | Hora simulada (0.0–24.0).                     |
 | `daylight_factor`       | 0.0 noche → 1.0 día pleno (interpolación lineal). |
 | `day`                   | Número de día simulado.                       |
@@ -115,13 +119,14 @@ Cada neurona detecta una condición y su significado está documentado en
 - `h3 night` = relu(night − 0.50)
 - `h4 food_ahead` = relu(food_close − 0.20)
 
-### Salidas (4, sigmoid → [0,1])
+### Salidas (5, sigmoid → [0,1])
 
 | Salida       | Intención        | El cuerpo hace |
 |--------------|------------------|----------------|
 | `move_x`, `move_y` | dirección deseada (`2v−1 ∈ [−1,1]`) | avanzar a `AGENT_SPEED` celdas/s, con claims por eje; celda bloqueada → sostén pegajoso por eje (sin temblor) + re-sondeo cada `BLOCKED_PROBE_S`, o rodeo de `DETOUR_S` si la celda es una roca o el borde (ver Evitación de choques) |
 | `eat`        | comer            | si `eat > EAT_OUTPUT_THRESHOLD` (0.5) y el agente está sobre comida → comer (celda se vacía, regrow) |
 | `rest`       | descansar        | si `rest > REST_OUTPUT_THRESHOLD` (0.6) → no moverse y recuperar energía |
+| `grab`       | recoger          | si `grab > GRAB_OUTPUT_THRESHOLD` (0.5) y hay comida bajo el agente → pasa a su inventario (una ranura); la celda se vacía (mismo timer de regrow que comer) pero la comida se lleva, no se consume. El cuerpo ignora `grab` si el inventario está lleno; depositar/consumir lo llevado es trabajo futuro. |
 
 **Reflejo de supervivencia** (por debajo del cerebro, como en la biología):
 si `hunger > HUNGER_CRITICAL` (0.85), el agente ignora `rest` y sigue
@@ -216,7 +221,7 @@ tocan al padre), compartir referencias es inofensivo.
   a distancia Manhattan ≤ `MATE_RANGE` se buscan mutuamente: el reflejo de
   pareja vive en el **cuerpo** y sobreescribe la evitación de la red — el
   mismo patrón "cuerpo inviolable" que el food rush, sin tocar la
-  topología 10→5→4 ni los pesos afinados (la **entrada 9 del cerebro
+  topología 10→5→5 ni los pesos afinados (la **entrada 9 del cerebro
   sigue reservada**). A distancia 1 se aparean: cada padre paga
   `MATE_ENERGY_COST`, ambos entran en `MATE_COOLDOWN_S` (el primer
   apareamiento de un frame fija el cooldown de ambos, así que una pareja
@@ -253,10 +258,13 @@ comprueba con dos mundos pisados lado a lado).
 Una función por elemento, y el bucle las llama en este orden (importa):
 
 1. `draw_background` — suelo, con color interpolado según la hora.
-2. `draw_world` — obstáculos y recursos (celdas no vacías).
+2. `draw_world` — rocas, madera y recursos (celdas no vacías).
 3. `draw_agents` — un círculo por agente (color según estado: comiendo
    verde, descansando azul, hambriento naranja, apareándose **magenta**
    (cooldown de apareamiento, recién apareado o recién nacido), activo gris).
+   Un agente que lleva un recurso en su inventario muestra un punto pequeño
+   sobre la cabeza en el color de su recurso (comida: verde) con borde
+   oscuro.
 4. `draw_night_overlay` — oscurece el mundo de noche (surface translúcida);
    los agentes se oscurecen con el mundo (dormidos de noche, coherente).
 5. `draw_hud` — "Día N  HH:MM" y "Población: N  †muertes  +nacimientos"
@@ -279,7 +287,7 @@ Una función por elemento, y el bucle las llama en este orden (importa):
 | ------------------------ | --------------------------------------- |
 | Tamaño de ventana, FPS, colores | `sim/config.py` (solo constantes). |
 | Título de la ventana     | `WINDOW_TITLE` en `sim/config.py`.      |
-| Densidad de rocas/comida | `OBSTACLE_DENSITY` / `RESOURCE_DENSITY` en `sim/config.py`. |
+| Densidad de rocas/madera/comida | `ROCK_DENSITY` / `WOOD_DENSITY` / `RESOURCE_DENSITY` en `sim/config.py`. |
 | Duración del día         | `DAY_LENGTH_S` en `sim/config.py`.      |
 | Horas de amanecer/anochecer | `DAWN_START`…`DUSK_END` en `sim/config.py`. |
 | Número de agentes, velocidad, ritmos de hambre/energía | sección `# --- Agents ---` en `sim/config.py`. |
