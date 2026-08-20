@@ -21,15 +21,21 @@ Principios del proyecto:
 
 - ✅ Repositorio git inicializado, `.gitignore` completo.
 - ✅ Ventana pygame funcional (800×600, 60 FPS, cierre limpio).
-- ✅ Documentación base creada.
+- ✅ **Mundo 2D con grid** — 40×30 celdas generadas por semilla fija:
+  suelo, obstáculos (rocas) y recursos (comida). Lógica pura en
+  `sim/world.py`, testeable sin ventana.
+- ✅ **Ciclo día/noche** — un día simulado cada 60 s reales: colores que se
+  interpolan suavemente, overlay nocturno, sol y luna con arco, estrellas,
+  y HUD con hora.
+- ⏳ **Agentes** — siguiente paso: entidades con posición y movimiento.
 
 ## Hoja de ruta (idea aproximada, sin compromiso)
 
-1. **Agentes** — entidades con posición, movimiento y estado (`sim/agent.py`).
-2. **Mundo** — el espacio donde viven, con recursos (`sim/world.py`).
-3. **Comportamientos** — reglas simples por agente (buscar, huir, descansar).
-4. **Interacción** — comunicación y memoria entre agentes.
-5. **Sociedades** — estructuras emergentes visibles en pantalla.
+1. **Agentes** — entidades con posición, movimiento y estado (`sim/agent.py`),
+   moviéndose por el grid usando `is_walkable` / `cell_type`.
+2. **Comportamientos** — REDES NEURONALES.
+3. **Interacción** — comunicación y memoria entre agentes.
+4. **Sociedades** — estructuras emergentes visibles en pantalla.
 
 ## Índice
 
