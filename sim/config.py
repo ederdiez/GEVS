@@ -70,7 +70,7 @@ RESOURCE_REGROW_S = 40.0   # seconds until an eaten food cell regrows
 FOOD_SENSE_RANGE = 8.0     # cells; beyond this the brain gets no food direction
 AGENT_SENSE_RANGE = 2.0    # cells; "personal space" — nearest-agent sensors below this
 BLOCKED_PROBE_S = 0.5      # s; while holding a blocked cell, re-probe it this often
-REST_WAKE_ENERGY = 0.60    # resting agents stay down until energy >= this (nap latch)
+REST_WAKE_ENERGY = 0.50    # resting agents stay down until energy >= this (nap latch)
 DETOUR_S = 0.4             # s; slide around a rock/border before resuming (2.4 cells at AGENT_SPEED)
 
 # Agent colors (drawing.py): state -> color
@@ -191,14 +191,14 @@ TRAIT_MIN = 0.5               # límite inferior del multiplicador de rasgo
 TRAIT_MAX = 2.0               # límite superior
 
 # --- Death and population ---
-MAX_AGE_S = 180.0             # s; death by old age (3 simulated days)
+MAX_AGE_S = 300.0             # s; death by old age (5 simulated days)
 MAX_POPULATION = 60           # safety cap on the living population
 
 # --- Reproduction ---
 MATE_ENERGY_THRESHOLD = 0.60  # min energy to be eligible to mate
 MATE_HUNGER_MAX = 0.50        # max hunger to be eligible to mate
 MATE_COOLDOWN_S = 15.0        # s of waiting after mating (also the child's "infancy")
-MATE_RANGE = 2.0              # cells; mate reflex seeks partners within this radius
+MATE_RANGE = 5.0              # cells; mate reflex seeks partners within this radius
 MATE_ENERGY_COST = 0.25       # energy paid by EACH parent (threshold 0.6 - cost 0.25 -> never negative)
-CHILD_INITIAL_ENERGY = 0.60   # the child's starting energy
-CHILD_INITIAL_HUNGER = 0.30   # the child's starting hunger
+CHILD_INITIAL_ENERGY = 0.80   # the child's starting energy
+CHILD_INITIAL_HUNGER = 0.20   # the child's starting hunger
