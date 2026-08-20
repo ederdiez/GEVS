@@ -64,9 +64,9 @@ HUNGER_WARNING = 0.55      # >= this, agent looks hungry (color + eat drive)
 HUNGER_CRITICAL = 0.85     # >= this, survival reflex: keep moving even at night
 EAT_RATE = 0.45            # hunger lost per second while eating
 EAT_DURATION_S = 2.0       # seconds it takes to eat one food cell
-ENERGY_DRAIN_RATE = 0.017  # energy lost per second while awake (full -> sleepy in ~20 s: real mid-day naps)
-ENERGY_REST_RATE = 0.035   # energy gained per second while resting
-RESOURCE_REGROW_S = 45.0   # seconds until an eaten food cell regrows
+ENERGY_DRAIN_RATE = 0.013  # energy lost per second while awake (full -> sleepy in ~20 s: real mid-day naps)
+ENERGY_REST_RATE = 0.045   # energy gained per second while resting
+RESOURCE_REGROW_S = 40.0   # seconds until an eaten food cell regrows
 FOOD_SENSE_RANGE = 8.0     # cells; beyond this the brain gets no food direction
 AGENT_SENSE_RANGE = 2.0    # cells; "personal space" — nearest-agent sensors below this
 BLOCKED_PROBE_S = 0.5      # s; while holding a blocked cell, re-probe it this often
