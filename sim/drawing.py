@@ -22,8 +22,9 @@ def draw_background(screen: pygame.Surface, world) -> None:
 
 
 _CELL_COLORS = {
-    cfg.CELL_OBSTACLE: cfg.COLOR_CELL_OBSTACLE,
     cfg.CELL_RESOURCE: cfg.COLOR_CELL_RESOURCE,
+    cfg.CELL_ROCK: cfg.COLOR_CELL_ROCK,
+    cfg.CELL_WOOD: cfg.COLOR_CELL_WOOD,
 }
 
 

@@ -1,8 +1,8 @@
 """World: a grid of cells, a day/night clock, and the agents inside it.
 
 Pure logic, no pygame (testable headless). Cells are ints, see
-sim.config: CELL_EMPTY, CELL_OBSTACLE, CELL_RESOURCE. The clock
-advances in update(dt) and drives the day/night cycle.
+sim.config: CELL_EMPTY, CELL_BORDER, CELL_RESOURCE, CELL_ROCK, CELL_WOOD.
+The clock advances in update(dt) and drives the day/night cycle.
 
 Food (resources) can be eaten: the cell empties and regrows after
 RESOURCE_REGROW_S. Agents occupy cells exclusively via claims
@@ -55,9 +55,14 @@ class World:
         grid = [[cfg.CELL_EMPTY for _ in range(self.cols)] for _ in range(self.rows)]
         for y in range(self.rows):
             for x in range(self.cols):
-                if self.rng.random() < cfg.OBSTACLE_DENSITY:
-                    grid[y][x] = cfg.CELL_OBSTACLE
-        # second pass: resources only on empty cells
+                if self.rng.random() < cfg.ROCK_DENSITY:
+                    grid[y][x] = cfg.CELL_ROCK
+        # second pass: wood only on empty cells
+        for y in range(self.rows):
+            for x in range(self.cols):
+                if grid[y][x] == cfg.CELL_EMPTY and self.rng.random() < cfg.WOOD_DENSITY:
+                    grid[y][x] = cfg.CELL_WOOD
+        # third pass: resources only on empty cells
         for y in range(self.rows):
             for x in range(self.cols):
                 if grid[y][x] == cfg.CELL_EMPTY and self.rng.random() < cfg.RESOURCE_DENSITY:
@@ -245,10 +250,13 @@ class World:
         return 0 <= x < self.cols and 0 <= y < self.rows
 
     def cell_type(self, x: int, y: int) -> int:
-        """Cell type at (x, y); out of bounds counts as an obstacle."""
+        """Cell type at (x, y); out of bounds counts as the world border."""
         if not self.in_bounds(x, y):
-            return cfg.CELL_OBSTACLE
+            return cfg.CELL_BORDER
         return self.grid[y][x]
 
     def is_walkable(self, x: int, y: int) -> bool:
-        return self.in_bounds(x, y) and self.grid[y][x] != cfg.CELL_OBSTACLE
+        """True on empty cells and food; rocks and wood are collidable."""
+        return (self.in_bounds(x, y)
+                and self.grid[y][x] != cfg.CELL_ROCK
+                and self.grid[y][x] != cfg.CELL_WOOD)

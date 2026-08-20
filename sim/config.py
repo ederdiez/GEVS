@@ -20,17 +20,21 @@ WORLD_SEED = 42                # fixed seed -> reproducible world
 
 # --- Cell types (ints) ---
 CELL_EMPTY = 0
-CELL_OBSTACLE = 1
-CELL_RESOURCE = 2
+CELL_BORDER = 1               # world limits only (never a cell in the grid)
+CELL_RESOURCE = 2             # food (green)
+CELL_ROCK = 3                 # rock: collidable (future functionality pending)
+CELL_WOOD = 4                 # wood: collidable (future functionality pending)
 
 # --- Procedural generation (densities 0.0-1.0) ---
-OBSTACLE_DENSITY = 0.12
+ROCK_DENSITY = 0.08
+WOOD_DENSITY = 0.04
 RESOURCE_DENSITY = 0.04
 
 # --- Environment colors (RGB) ---
 COLOR_FLOOR_DAY = (52, 62, 82)       # floor (empty cell) in full daylight
 COLOR_FLOOR_NIGHT = (24, 28, 38)     # floor at full night
-COLOR_CELL_OBSTACLE = (116, 106, 96) # rock / wall
+COLOR_CELL_ROCK = (116, 106, 96)     # rock (gray-brown)
+COLOR_CELL_WOOD = (139, 101, 54)     # wood (brown)
 COLOR_CELL_RESOURCE = (48, 148, 96)  # food (green)
 
 # --- Day/night cycle (simulated hours) ---
@@ -126,7 +130,13 @@ BRAIN_B_HIDDEN = [-0.55, -0.85, 0.70, -0.50, -0.20]
 #                    plus food_ahead (h4) so standing on food seals the call.
 #   rest:            desire to rest; body stops moving when > REST_OUTPUT_THRESHOLD.
 #                    Weight on night (sleep at night) + sleepy (h2 weight 8.0:
-#                    naps once energy < ~0.65). The body's latch
+#                    naps once energy < ~0.65). The h3 weight is 8.0 (not 4.0)
+#                    to widen the night detector's structural margin: mutation
+#                    drift shrinks h3's activation (noise/food weights on the
+#                    unit) and can add a negative noise skip on this row, so a
+#                    drifted genome can see h3 ~0.25 at full night; 8.0 keeps
+#                    rest pre-activation >= ~0.9 even then (sigmoid >= 0.71,
+#                    above the 0.6 threshold). The body's latch
 #                    (REST_WAKE_ENERGY) makes naps real instead of a one-frame
 #                    flicker at the threshold.
 #   other_close (col 14): 0 everywhere, RESERVED for future training — a
@@ -137,7 +147,7 @@ BRAIN_W_OUT = [
     [0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 2.4, 0.0, 0.0, 1.6,  -3.0, 0.0, 0.0],  # move_x
     [0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 2.4, 0.0, 1.6,  0.0, -3.0, 0.0],  # move_y
     [8.0, 10.0, 0.0, 0.0, 1.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0],  # eat
-    [0.0, 0.0, 8.0, 4.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0],  # rest
+    [0.0, 0.0, 8.0, 8.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0],  # rest
 ]
 # Movement biases: -0.5 (was -2.0). A neutral other_dir (0.5, no neighbor)
 # contributes -3.0 * 0.5 = -1.5 to each move pre-activation, exactly the
