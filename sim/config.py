@@ -82,7 +82,7 @@ COLOR_AGENT_MATING = (214, 94, 194)    # magenta: in the mate cooldown (recently
 COLOR_AGENT_OUTLINE = (30, 32, 40)     # dark outline on every agent
 
 # --- Brain (neural network) ---
-# MLP: 10 inputs -> 5 hidden relu units -> 5 sigmoid outputs. Pure Python,
+# MLP: 11 inputs -> 6 hidden relu units -> 5 sigmoid outputs. Pure Python,
 # weights hand-tuned below so behavior is sensible. The brain proposes
 # intentions; the agent's body (agent.py) enforces what is inviolable.
 #
@@ -97,27 +97,31 @@ COLOR_AGENT_OUTLINE = (30, 32, 40)     # dark outline on every agent
 #   7 other_dir_x    (dx + 1) / 2 toward nearest other agent; 0.5 if none in range
 #   8 other_dir_y    same, Y axis
 #   9 other_close    1 - min(dist / AGENT_SENSE_RANGE, 1); 0 if none in range
+#   10 has_food      1.0 if the one-slot inventory is full (carrying a
+#                    resource), 0.0 if empty
 
-# Hidden layer: 5 readable detectors (relu). One row per unit; columns are
-# the first 7 inputs (0-6: needs, night, food direction, food_close, noise).
-# The output layer sees all 10 inputs via skip connections (see below).
-# Each unit is a condition detector:
+# Hidden layer: 6 readable detectors (relu). One row per unit; columns are
+# inputs 0-6 and 10 (needs, night, food direction, food_close, noise,
+# has_food). The output layer sees all 11 inputs via skip connections
+# (see below). Each unit is a condition detector:
 #   h0 hungry     = relu(hunger - 0.55)   hunger above warning level
 #   h1 starving   = relu(hunger - 0.85)   hunger above critical level
 #   h2 sleepy     = relu(0.70 - energy)   energy below 0.70
 #   h3 night      = relu(night - 0.50)    it is dark
 #   h4 food_ahead = relu(food_close - 0.20) food nearby
+#   h5 carrying   = relu(has_food - 0.50) inventory full (carrying a resource)
 BRAIN_W_HIDDEN = [
-    [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h0
-    [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h1
-    [0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h2
-    [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],  # h3
-    [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],  # h4
+    [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h0
+    [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h1
+    [0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h2
+    [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h3
+    [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],  # h4
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],  # h5
 ]
-BRAIN_B_HIDDEN = [-0.55, -0.85, 0.70, -0.50, -0.20]
+BRAIN_B_HIDDEN = [-0.55, -0.85, 0.70, -0.50, -0.20, -0.50]
 
 # Output layer: 5 outputs (move_x, move_y, eat, rest, grab). One row per output;
-# columns are the 5 hidden activations followed by the 10 raw inputs
+# columns are the 6 hidden activations followed by the 11 raw inputs
 # (skip connections, so food direction reaches movement directly).
 #   move_x, move_y:  direction, 2 * output - 1 in [-1, 1]. Seek food
 #                    (weight on food_dir) blended with noise (wandering).
@@ -139,7 +143,7 @@ BRAIN_B_HIDDEN = [-0.55, -0.85, 0.70, -0.50, -0.20]
 #                    above the 0.6 threshold). The body's latch
 #                    (REST_WAKE_ENERGY) makes naps real instead of a one-frame
 #                    flicker at the threshold.
-#   other_close (col 14): 0 everywhere, RESERVED for future training — a
+#   other_close (col 15): 0 everywhere, RESERVED for future training — a
 #                    linear output cannot multiply closeness x direction, so
 #                    distance modulation would need a hidden detector.
 #   grab:            pick up the food under the agent into its one-slot
@@ -150,15 +154,16 @@ BRAIN_B_HIDDEN = [-0.55, -0.85, 0.70, -0.50, -0.20]
 #                    grabbing must be discovered by mutation drift over
 #                    generations — it may never emerge. A usable policy
 #                    needs pre-activation > 0, e.g. a weight ~ +2.1 on
-#                    food_close (col 10) or on h4 (food_ahead, col 4) to
-#                    fire while standing on food.
+#                    food_close (col 11) or on h4 (food_ahead, col 4); h5
+#                    (carrying, col 5) and has_food (col 16) tell the brain
+#                    the inventory is full, to decide what to do with it.
 BRAIN_W_OUT = [
-    #      h0  h1  h2  h3  h4  | hunger energy night dir_x dir_y close noise oth_x oth_y oth_close
-    [0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 2.4, 0.0, 0.0, 1.6,  -3.0, 0.0, 0.0],  # move_x
-    [0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 2.4, 0.0, 1.6,  0.0, -3.0, 0.0],  # move_y
-    [8.0, 10.0, 0.0, 0.0, 1.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0],  # eat
-    [0.0, 0.0, 8.0, 8.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0],  # rest
-    [0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0],  # grab
+    #      h0  h1  h2  h3  h4  h5 | hunger energy night dir_x dir_y close noise oth_x oth_y oth_close has_food
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 2.4, 0.0, 0.0, 1.6,  -3.0, 0.0, 0.0, 0.0],  # move_x
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 2.4, 0.0, 1.6,  0.0, -3.0, 0.0, 0.0],  # move_y
+    [8.0, 10.0, 0.0, 0.0, 1.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # eat
+    [0.0, 0.0, 8.0, 8.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # rest
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # grab
 ]
 # Movement biases: -0.5 (was -2.0). A neutral other_dir (0.5, no neighbor)
 # contributes -3.0 * 0.5 = -1.5 to each move pre-activation, exactly the

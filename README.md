@@ -1,21 +1,20 @@
 # GEVS IA — Simulación de Sociedades Inteligentes
 
-Simulación visual de sociedades inteligentes construida con **Python + pygame**.
-El objetivo a largo plazo es simular agentes que interactúan entre sí y
-forman estructuras sociales emergentes.
+Simulación visual de sociedades inteligentes construida con **Python +
+pygame**. El objetivo a largo plazo es simular agentes que interactúan entre
+sí y forman estructuras sociales emergentes.
 
 **Estado actual:** mundo 2D con grid en vista top-down (rocas, madera y
 recursos generados por semilla fija), ciclo día/noche con iluminación
 variable (HUD con hora y población) y agentes cuyo comportamiento completo
 sale de una red neuronal **propia por individuo** (cada agente tiene su
 genoma: pesos de la red + rasgos físicos hereditarios). Deambulan, comen
-con hambre, duermen de noche, se apartan al encontrarse (sin temblores
-contra rocas ni vecinos) y pueden **recoger comida** en un inventario de
-una ranura (punto sobre la cabeza mientras la llevan). **Nacen, se
-reproducen y mueren**: dos agentes con energía suficiente y a distancia
-corta se aparean (crossover + mutación del genoma); el hambre, el
-agotamiento o la vejez los matan, y la población fluctúa bajo un tope de
-seguridad.
+con hambre, duermen de noche, se apartan al encontrarse y pueden recoger
+comida en un inventario de una ranura (punto sobre la cabeza mientras la
+llevan). **Nacen, se reproducen y mueren**: dos agentes con energía
+suficiente y a distancia corta se aparean (crossover + mutación del
+genoma); el hambre, el agotamiento o la vejez los matan, y la población
+fluctúa bajo un tope de seguridad.
 
 Leyenda de colores de los agentes:
 
@@ -44,5 +43,12 @@ python3 -m venv .venv
 
 Toda la documentación vive en [`docs/`](docs/index.md):
 
-- [`docs/guia_inicio.md`](docs/guia_inicio.md) — instalación y ejecución.
-- [`docs/arquitectura.md`](docs/arquitectura.md) — estructura del código y cómo editarlo.
+| Documento | Contenido |
+| --------- | --------- |
+| [Índice](docs/index.md) | Visión, estado actual y hoja de ruta. |
+| [Guía de inicio](docs/guia_inicio.md) | Instalación y ejecución. |
+| [Arquitectura](docs/arquitectura.md) | Mapa de módulos y cómo editar el código. |
+| [Mundo](docs/mundo.md) | Grid, reloj y API del mundo. |
+| [Agentes](docs/agentes.md) | Cerebro NN, cuerpo y evitación de choques. |
+| [Genética](docs/genetica.md) | Genoma, reproducción y muerte. |
+| [Dibujo](docs/dibujo.md) | Capas de dibujo y HUD. |

@@ -85,7 +85,7 @@ class Agent:
     # -- brain signals --
 
     def _inputs(self) -> list:
-        """The 10 normalized inputs the brain reads (order matches config)."""
+        """The 11 normalized inputs the brain reads (order matches config)."""
         world = self.world
         dx, dy, dist = self._food_dir()
         food_close = 1.0 - min(dist / self.food_sense_range, 1.0) if dist is not None else 0.0
@@ -107,6 +107,9 @@ class Agent:
             (odx + 1.0) / 2.0 if odx is not None else 0.5,
             (ody + 1.0) / 2.0 if ody is not None else 0.5,
             other_close,
+            # has_food: 1.0 while the one-slot inventory is full (carrying a
+            # resource), 0.0 when empty. Pure state, no new randomness.
+            1.0 if self.inventory is not None else 0.0,
         ]
 
     def _food_dir(self):
@@ -152,7 +155,7 @@ class Agent:
         """Eligible to mate: alive, off cooldown, fed and rested enough.
 
         This drive lives in the body, not the brain: adding mate inputs
-        would break the 10->5->5 topology and the hand-tuned weights
+        would break the 11->6->5 topology and the hand-tuned weights
         (input 9 stays RESERVED, config.py).
         """
         return (self.alive and self._mate_cooldown <= 0.0
