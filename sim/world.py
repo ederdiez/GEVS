@@ -25,7 +25,6 @@ class World:
 
         # --- world content ---
         self.grid = self._generate_grid()
-        self.stars = self._generate_stars()  # cosmetic: [(x, y, radius), ...] in px
         self.entities = []                   # future agents will live here
 
     # -- generation (deterministic for a given seed) --
@@ -42,16 +41,6 @@ class World:
                 if grid[y][x] == cfg.CELL_EMPTY and self.rng.random() < cfg.RESOURCE_DENSITY:
                     grid[y][x] = cfg.CELL_RESOURCE
         return grid
-
-    def _generate_stars(self) -> list:
-        return [
-            (
-                self.rng.randrange(cfg.WINDOW_WIDTH),
-                self.rng.randrange(cfg.SKY_ARC_BASE_Y + 1),
-                self.rng.randint(1, cfg.STAR_MAX_RADIUS),
-            )
-            for _ in range(cfg.STAR_COUNT)
-        ]
 
     # -- simulation clock --
 

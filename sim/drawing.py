@@ -4,8 +4,6 @@ Each function draws one thing onto a surface. Add new drawing
 functions here as the simulation grows (agents, food, terrain...).
 """
 
-import math
-
 import pygame
 
 from sim import config as cfg
@@ -53,30 +51,6 @@ def draw_night_overlay(screen: pygame.Surface, world) -> None:
         _night_surf.fill(cfg.NIGHT_OVERLAY_COLOR)
     _night_surf.set_alpha(alpha)
     screen.blit(_night_surf, (0, 0))
-
-
-def _arc_position(frac: float) -> tuple:
-    """Position of a celestial body along the arc; frac in [0, 1]."""
-    x = int(frac * cfg.WINDOW_WIDTH)
-    y = cfg.SKY_ARC_BASE_Y - int(math.sin(math.pi * frac) * cfg.SKY_ARC_HEIGHT)
-    return x, y
-
-
-def draw_sky_objects(screen: pygame.Surface, world) -> None:
-    """Draw the sun by day, the moon and stars by night."""
-    f = world.daylight_factor
-    if f >= 0.5:
-        day_t = (world.hour - cfg.DAWN_START) / (cfg.DUSK_END - cfg.DAWN_START)
-        color = lerp_color(cfg.COLOR_FLOOR_DAY, cfg.COLOR_SUN, (f - 0.5) * 2.0)
-        pygame.draw.circle(screen, color, _arc_position(day_t), cfg.SUN_RADIUS)
-    else:
-        night_span = 24.0 - (cfg.DUSK_END - cfg.DAWN_START)  # hours of night
-        night_t = ((world.hour - cfg.DUSK_END) % 24.0) / night_span
-        color = lerp_color(cfg.COLOR_FLOOR_NIGHT, cfg.COLOR_MOON, (0.5 - f) * 2.0)
-        pygame.draw.circle(screen, color, _arc_position(night_t), cfg.MOON_RADIUS)
-        if f < 0.3:  # stars only in deep night
-            for x, y, r in world.stars:
-                pygame.draw.circle(screen, cfg.COLOR_STAR, (x, y), r)
 
 
 _font = None

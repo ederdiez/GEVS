@@ -41,15 +41,6 @@ DUSK_START = 18.0            # dusk begins: light starts fading
 DUSK_END = 21.0              # full night (invariant: DAWN_START < DAWN_END < DUSK_START < DUSK_END)
 NIGHT_OVERLAY_COLOR = (8, 10, 28)
 NIGHT_OVERLAY_ALPHA = 130    # max overlay alpha (0-255)
-COLOR_SUN = (255, 224, 130)
-COLOR_MOON = (215, 220, 235)
-SUN_RADIUS = 12
-MOON_RADIUS = 9
-SKY_ARC_BASE_Y = 96          # arc "horizon" (px)
-SKY_ARC_HEIGHT = 84          # arc amplitude (px)
-STAR_COUNT = 40              # night stars (0 to disable)
-STAR_MAX_RADIUS = 2
-COLOR_STAR = (235, 240, 250)
 MAX_DT = 0.25                # cap delta time per frame (s)
 
 # --- HUD ---

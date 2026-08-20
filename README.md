@@ -4,9 +4,9 @@ Simulación visual de sociedades inteligentes construida con **Python + pygame**
 El objetivo a largo plazo es simular agentes que interactúan entre sí y
 forman estructuras sociales emergentes.
 
-**Estado actual:** mundo 2D con grid (rocas y recursos generados por semilla
-fija) y ciclo día/noche completo (sol, luna, estrellas, HUD con hora). La
-simulación de agentes se añadirá sobre esta base.
+**Estado actual:** mundo 2D con grid en vista top-down (rocas y recursos
+generados por semilla fija) y ciclo día/noche con iluminación variable
+(HUD con hora). La simulación de agentes se añadirá sobre esta base.
 
 ## Requisitos
 

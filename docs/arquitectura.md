@@ -60,8 +60,11 @@ Una función por elemento, y el bucle las llama en este orden (importa):
 1. `draw_background` — suelo, con color interpolado según la hora.
 2. `draw_world` — obstáculos y recursos (celdas no vacías).
 3. `draw_night_overlay` — oscurece el mundo de noche (surface translúcida).
-4. `draw_sky_objects` — sol (día) o luna y estrellas (noche), siguiendo un arco.
-5. `draw_hud` — reloj "Día N  HH:MM" (siempre legible, encima del overlay).
+4. `draw_hud` — reloj "Día N  HH:MM" (siempre legible, encima del overlay).
+
+> **Perspectiva:** la vista es top-down pura (el mundo se ve desde arriba),
+> así que no hay cielo: la luz del día se transmite solo con la
+> interpolación de colores y el overlay nocturno.
 
 > **Nota técnica:** el HUD se dibuja con `pygame._freetype` en lugar de
 > `pygame.font`. El wheel de pygame 2.6.1 para Python 3.14 no incluye la

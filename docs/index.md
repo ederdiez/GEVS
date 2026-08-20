@@ -25,8 +25,8 @@ Principios del proyecto:
   suelo, obstáculos (rocas) y recursos (comida). Lógica pura en
   `sim/world.py`, testeable sin ventana.
 - ✅ **Ciclo día/noche** — un día simulado cada 60 s reales: colores que se
-  interpolan suavemente, overlay nocturno, sol y luna con arco, estrellas,
-  y HUD con hora.
+  interpolan suavemente, overlay nocturno e HUD con hora (vista top-down,
+  sin cielo: la iluminación varía con la hora).
 - ⏳ **Agentes** — siguiente paso: entidades con posición y movimiento.
 
 ## Hoja de ruta (idea aproximada, sin compromiso)

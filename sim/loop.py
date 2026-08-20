@@ -7,7 +7,6 @@ from sim.drawing import (
     draw_background,
     draw_hud,
     draw_night_overlay,
-    draw_sky_objects,
     draw_world,
 )
 from sim.world import World
@@ -36,7 +35,6 @@ def run(screen: pygame.Surface) -> None:
         draw_background(screen, world)
         draw_world(screen, world)
         draw_night_overlay(screen, world)
-        draw_sky_objects(screen, world)
         draw_hud(screen, world)
         pygame.display.flip()
 
