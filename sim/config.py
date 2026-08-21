@@ -104,34 +104,54 @@ COLOR_AGENT_OUTLINE = (30, 32, 40)     # dark outline on every agent
 # inputs 0-6 and 10 (needs, night, food direction, food_close, noise,
 # has_food). The output layer sees all 11 inputs via skip connections
 # (see below). Each unit is a condition detector:
-#   h0 hungry     = relu(hunger - 0.55)   hunger above warning level
-#   h1 starving   = relu(hunger - 0.85)   hunger above critical level
+#   h0 food_x     = relu(2*hunger + food_dir_x - 2)  hunger-gated food on X
+#   h1 food_y     = relu(2*hunger + food_dir_y - 2)  hunger-gated food on Y
 #   h2 sleepy     = relu(0.70 - energy)   energy below 0.70
 #   h3 night      = relu(night - 0.50)    it is dark
 #   h4 food_ahead = relu(food_close - 0.20) food nearby
 #   h5 carrying   = relu(has_food - 0.50) inventory full (carrying a resource)
+#
+# h0/h1 are the food-direction gates: relu(2*hunger + food_dir - 2) fires
+# only when hunger is high enough AND food lies in that half-plane, so a
+# satiated agent gets no food pull at all and wanders on noise alone
+# ("curiosity"), while a hungry one pursues with a pull that grades with
+# hunger: 0 below hunger ~0.5, ~0.4 at 0.7, 1.0 at hunger 1.0 with food
+# directly ahead. Food behind (food_dir < 2 - 2*hunger) never fires, so
+# pursuit never pushes the wrong way.
 BRAIN_W_HIDDEN = [
-    [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h0
-    [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h1
+    [2.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],  # h0
+    [2.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],  # h1
     [0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h2
     [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h3
     [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],  # h4
     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],  # h5
 ]
-BRAIN_B_HIDDEN = [-0.55, -0.85, 0.70, -0.50, -0.20, -0.50]
+BRAIN_B_HIDDEN = [-2.0, -2.0, 0.70, -0.50, -0.20, -0.50]
 
 # Output layer: 5 outputs (move_x, move_y, eat, rest, grab). One row per output;
 # columns are the 6 hidden activations followed by the 11 raw inputs
-# (skip connections, so food direction reaches movement directly).
-#   move_x, move_y:  direction, 2 * output - 1 in [-1, 1]. Seek food
-#                    (weight on food_dir) blended with noise (wandering).
-#                    Avoidance: negative weight (-3.0) on the other_dir
-#                    sensor pushes away from the nearest agent — it only
-#                    engages when someone is within AGENT_SENSE_RANGE.
+# (skip connections: the raw inputs also reach the outputs directly).
+#   move_x, move_y:  direction, 2 * output - 1 in [-1, 1]. Food seeking is
+#                    hunger-gated: the food direction arrives through the
+#                    h0/h1 gates (see above), so a satiated agent has no
+#                    food pull and wanders on noise alone, while a hungry
+#                    one pursues the nearest food with a pull that grades
+#                    with hunger (up to 2.4 at hunger 1.0). Avoidance:
+#                    negative weight (-3.0) on the other_dir sensor pushes
+#                    away from the nearest agent — it only engages when
+#                    someone is within AGENT_SENSE_RANGE.
 #   eat:             desire to eat; body acts only when > EAT_OUTPUT_THRESHOLD
-#                    and the agent stands on a food cell. Weight on the
-#                    hungry/starving detectors so it fires as hunger peaks,
-#                    plus food_ahead (h4) so standing on food seals the call.
+#                    and the agent stands on a food cell. Hunger reaches the
+#                    row directly (skip weight 20.0); paired with the bias
+#                    -10.5 it replays the old "hungry" detector in the
+#                    output layer: 20 * hunger - 10.5 crosses 0 (sigmoid
+#                    0.5) at hunger ~0.53, just below HUNGER_WARNING. The
+#                    food_ahead detector (h4, weight 1.0) seals the call on
+#                    a food cell: it adds +0.8 pre-activation there, easing
+#                    the threshold to ~0.48 when standing on food. The 20x
+#                    weight also widens the drift margin: a mutation of
+#                    ±0.2 on the weight shifts the threshold by ±0.01 of
+#                    hunger.
 #   rest:            desire to rest; body stops moving when > REST_OUTPUT_THRESHOLD.
 #                    Weight on night (sleep at night) + sleepy (h2 weight 8.0:
 #                    naps once energy < ~0.65). The h3 weight is 8.0 (not 4.0)
@@ -159,17 +179,22 @@ BRAIN_B_HIDDEN = [-0.55, -0.85, 0.70, -0.50, -0.20, -0.50]
 #                    the inventory is full, to decide what to do with it.
 BRAIN_W_OUT = [
     #      h0  h1  h2  h3  h4  h5 | hunger energy night dir_x dir_y close noise oth_x oth_y oth_close has_food
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 2.4, 0.0, 0.0, 1.6,  -3.0, 0.0, 0.0, 0.0],  # move_x
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 2.4, 0.0, 1.6,  0.0, -3.0, 0.0, 0.0],  # move_y
-    [8.0, 10.0, 0.0, 0.0, 1.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # eat
+    [2.4, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  -3.0, 0.0, 0.0, 0.0],  # move_x
+    [0.0, 2.4, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  0.0, -3.0, 0.0, 0.0],  # move_y
+    [0.0, 0.0, 0.0, 0.0, 1.0, 0.0,  20.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # eat
     [0.0, 0.0, 8.0, 8.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # rest
     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # grab
 ]
-# Movement biases: -0.5 (was -2.0). A neutral other_dir (0.5, no neighbor)
-# contributes -3.0 * 0.5 = -1.5 to each move pre-activation, exactly the
-# amount the bias was lowered, so the solo wander envelope is unchanged.
-# grab bias: -2.0, negative on purpose — see the grab row comment above.
-BRAIN_B_OUT = [-0.5, -0.5, -1.0, -1.0, -2.0]
+# Movement biases: +0.5. The old -0.5 was tuned against a neutral food_dir
+# input (0.5 with no food) that contributed +2.4 * 0.5 = +1.2 to each move
+# pre-activation; now food direction is gated through h0/h1 (0 when
+# satiated), so that +1.2 baseline is gone and the bias compensates: the
+# solo wander envelope is 2.0 * noise - 1.5 + 0.5 = 2.0 * noise - 1.0,
+# i.e. [-1.0, +1.0] — symmetric, slightly livelier than the old
+# [-0.8, +0.8].
+# eat bias: -10.5 pairs with the 20.0 hunger skip (see the eat comment
+# above). grab bias: -2.0, negative on purpose — see the grab row comment.
+BRAIN_B_OUT = [0.5, 0.5, -10.5, -1.0, -2.0]
 
 # Output thresholds: above these, the body acts on the intention.
 EAT_OUTPUT_THRESHOLD = 0.5
