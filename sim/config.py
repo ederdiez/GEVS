@@ -89,7 +89,7 @@ SLEEP_RECOVERY_PEAK_TIME = 7.0      # s asleep at the deep-sleep peak
 SLEEP_RECOVERY_SIGMA_RISE = 1.5     # s; spread of the climb INTO deep sleep (steep)
 SLEEP_RECOVERY_SIGMA_FALL = 10.0    # s; spread of the ease OUT of deep sleep (long tail)
 
-RESOURCE_REGROW_S = 30.0   # seconds until an eaten food cell regrows
+RESOURCE_REGROW_S = 100.0   # seconds until an eaten food cell regrows
 FOOD_SENSE_RANGE = 8.0     # cells; beyond this the brain gets no food direction
 AGENT_SENSE_RANGE = 2.0    # cells; "personal space" — nearest-agent sensors below this
 BLOCKED_PROBE_S = 0.5      # s; while holding a blocked cell, re-probe it this often
