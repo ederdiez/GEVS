@@ -25,7 +25,7 @@ class World:
         self.rng = random.Random(seed if seed is not None else cfg.WORLD_SEED)
 
         # --- simulation clock ---
-        self.time_sim = 0.0     # seconds since midnight, always in [0, DAY_LENGTH_S)
+        self.time_sim = 30.0     # seconds since midnight, always in [0, DAY_LENGTH_S)
         self.day = 1
 
         # --- world content ---

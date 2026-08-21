@@ -199,7 +199,7 @@ BRAIN_B_OUT = [0.5, 0.5, -10.5, -1.0, -2.0]
 # Output thresholds: above these, the body acts on the intention.
 EAT_OUTPUT_THRESHOLD = 0.5
 REST_OUTPUT_THRESHOLD = 0.6
-GRAB_OUTPUT_THRESHOLD = 0.5
+GRAB_OUTPUT_THRESHOLD = 0.3
 
 # --- Genetics ---
 # Each agent owns a Genome: the brain weight tables (sim.genetics) plus
