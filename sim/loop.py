@@ -32,6 +32,7 @@ def run(screen: pygame.Surface) -> None:
     running = True
     selected_agent = None
     inspector = create_inspector_window()
+    speed_index = 0  # index into config.SPEED_LEVELS; x1 by default
 
     while running:
         # Delta time in seconds since the last frame (capped to avoid
@@ -52,14 +53,23 @@ def run(screen: pygame.Surface) -> None:
                 if event_window is inspector.window or getattr(
                         event_window, "id", None) == inspector.window.id:
                     inspector.resize(event.x, event.y)
+            elif event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_EQUALS, pygame.K_KP_PLUS):
+                    speed_index = min(speed_index + 1, len(config.SPEED_LEVELS) - 1)
+                elif event.key in (pygame.K_MINUS, pygame.K_KP_MINUS):
+                    speed_index = max(speed_index - 1, 0)
 
         # 2. Update the world (clock, food regrowth), then each agent
-        #    (brain + body). Deferred deaths/births materialize in
-        #    end_frame, never while the loop is iterating entities.
-        world.update(dt)
-        for agent in world.entities:
-            agent.update(dt)
-        world.end_frame()
+        #    (brain + body), `speed` times per rendered frame so
+        #    simulated time fast-forwards while drawing stays at the same
+        #    FPS. Deferred deaths/births materialize in end_frame, never
+        #    while the loop is iterating entities.
+        speed = config.SPEED_LEVELS[speed_index]
+        for _ in range(speed):
+            world.update(dt)
+            for agent in world.entities:
+                agent.update(dt)
+            world.end_frame()
 
         if selected_agent is not None and not selected_agent.alive:
             selected_agent = None
@@ -71,7 +81,7 @@ def run(screen: pygame.Surface) -> None:
         draw_world(screen, world)
         draw_agents(screen, world, selected=selected_agent)
         draw_night_overlay(screen, world)
-        draw_hud(screen, world)
+        draw_hud(screen, world, speed=speed)
         pygame.display.flip()
 
         draw_inspector(inspector.surface, selected_agent)

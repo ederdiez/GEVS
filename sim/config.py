@@ -12,6 +12,12 @@ WINDOW_TITLE = "GEVS IA — Intelligent Societies"
 # --- Loop ---
 FPS = 60
 
+# --- Simulation speed control ---
+# Multiplier options cycled with the speed-up/speed-down keys (+/-): each
+# multiplier runs that many world/agent update steps per rendered frame,
+# so simulated time advances faster while drawing stays at the same FPS.
+SPEED_LEVELS = (1, 2, 4, 8, 16)
+
 # --- Grid and world ---
 CELL_SIZE = 20                 # px per cell (invariant: GRID_COLS * CELL_SIZE == WINDOW_WIDTH)
 GRID_COLS = 40                 # invariant: GRID_COLS * CELL_SIZE == WINDOW_WIDTH

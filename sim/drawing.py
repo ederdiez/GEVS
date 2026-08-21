@@ -122,17 +122,21 @@ def _get_font():
     return _font
 
 
-def draw_hud(screen: pygame.Surface, world) -> None:
-    """Draw the time-of-day HUD and population; call last so the night
-    overlay never dims it."""
+def draw_hud(screen: pygame.Surface, world, speed: int = 1) -> None:
+    """Draw the time-of-day HUD, population and speed multiplier; call
+    last so the night overlay never dims it."""
     font = _get_font()
     x, y = cfg.HUD_MARGIN, cfg.HUD_MARGIN
     # int() (not round()): at 23:59.5 round() -> 24:00 -> wraps to 00:00.
     total_min = int(world.hour * 60.0) % (24 * 60)  # avoid "24:00"
     h, m = divmod(total_min, 60)
-    for text, offset in ((f"Día {world.day}   {h:02d}:{m:02d}", 0),
-                         (f"Población: {len(world.entities)}  "
-                          f"†{world.stats_deaths}  +{world.stats_births}", 22)):
+    lines = [f"Día {world.day}   {h:02d}:{m:02d}",
+             f"Población: {len(world.entities)}  "
+             f"†{world.stats_deaths}  +{world.stats_births}"]
+    if speed != 1:
+        lines.append(f"Velocidad: x{speed}")
+    for offset, text in enumerate(lines):
+        offset *= 22
         shadow, s_rect = font.render(text, (0, 0, 0))
         screen.blit(shadow, (x + s_rect.x + 1, y + offset + s_rect.y + 1))
         label, l_rect = font.render(text, cfg.COLOR_HUD_TEXT)

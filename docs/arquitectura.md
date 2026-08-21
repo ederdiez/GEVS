@@ -28,15 +28,29 @@ gevs_ia/
 main.py
   └─ window.create_window()   →  crea la ventana principal
   └─ loop.run(screen)         →  crea la ventana del inspector, luego bucle infinito:
-        1. eventos (cerrar ventana, clic → seleccionar agente, resize del inspector...)
+        1. eventos (cerrar ventana, clic → seleccionar agente, resize del
+           inspector, +/- → cambia el multiplicador de velocidad...)
         2. world.update(dt)   →  reloj + regrow de comida
            + cada agente: brain.forward() (+ traza de elegibilidad) + cuerpo
              (movimiento, comer, descansar, aparearse) + brain.learn(reward)
            + world.end_frame() → materializa las muertes y nacimientos diferidos
+           — este paso se repite `speed` veces por frame dibujado (ver
+           "Velocidad de simulación" abajo)
         3. dibujar            ← drawing.py (5 capas, en orden) en la ventana principal
         4. inspector.draw_inspector() → red del agente seleccionado, en su propia ventana
         5. esperar al próximo frame (FPS)
 ```
+
+## Velocidad de simulación (fast-forward)
+
+Las teclas `+`/`-` cambian un multiplicador de velocidad (`sim/loop.py`,
+opciones en `config.SPEED_LEVELS`, x1 por defecto). En vez de escalar
+`dt`, cada frame dibujado repite el paso 2 completo (`world.update` +
+`agent.update` por agente + `world.end_frame()`) `speed` veces con el
+mismo `dt` real, y solo se dibuja una vez al final. Así el tiempo
+simulado avanza más rápido en tiempo real sin tocar el sub-stepping de
+movimiento (`AGENT_STEP_S`) ni el determinismo (mismo `dt` por paso,
+mismo `world.rng`). El HUD muestra "Velocidad: x{n}" cuando no es x1.
 
 ## Cómo editar cada cosa
 
@@ -60,6 +74,7 @@ main.py
 | Cómo se dibuja algo      | `sim/drawing.py` (añade una función).   |
 | La ventana del inspector | `sim/inspector.py` (colores en `config.py`, sección `# --- Inspector ---`). |
 | Qué hace el bucle        | `sim/loop.py`.                          |
+| Multiplicadores de velocidad (fast-forward) | `SPEED_LEVELS` en `sim/config.py`; teclas en `sim/loop.py`. |
 | Qué módulos se cargan    | `main.py`.                              |
 
 ## Cómo añadir algo nuevo (ejemplo: otra entidad)
