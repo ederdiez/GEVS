@@ -152,7 +152,7 @@ def test_no_free_cell() -> None:
     b = world.spawn_agent(bx, by, initial_hunger=0.2, initial_energy=0.8)
     for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1),
                    (1, 1), (1, -1), (-1, 1), (-1, -1)):
-        x, y = ax + dx, ay + dy
+        x, y = world.wrap(ax + dx, ay + dy)
         if world._cell_free_for_spawn(x, y):
             world.spawn_agent(x, y)  # dummy occupant
     check(world._find_child_spot(a) is None, "aún hay celda libre alrededor")

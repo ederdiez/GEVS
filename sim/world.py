@@ -167,6 +167,7 @@ class World:
 
     def _cell_free_for_spawn(self, x: int, y: int) -> bool:
         """Walkable, unclaimed and food-free: a valid birth cell."""
+        x, y = self.wrap(x, y)
         return (self.is_walkable(x, y) and (x, y) not in self.occupied
                 and self.grid[y][x] != cfg.CELL_RESOURCE)
 
@@ -177,7 +178,7 @@ class World:
         cx, cy = anchor.cx, anchor.cy
         for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1),
                        (1, 1), (1, -1), (-1, 1), (-1, -1)]:
-            x, y = cx + dx, cy + dy
+            x, y = self.wrap(cx + dx, cy + dy)
             if self._cell_free_for_spawn(x, y):
                 return x, y
         return None
