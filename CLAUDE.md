@@ -21,16 +21,10 @@ python3 -m venv .venv
 
 # Ejecutar la simulación (abre ventana principal + ventana inspector)
 .venv/bin/python main.py
-
-# Tests headless (sin pygame, sin pytest — scripts autocontenidos)
-.venv/bin/python tests/smoke_agents.py      # 9000 frames, invariantes de agentes/mundo/genética
-.venv/bin/python tests/evolution_test.py    # genética, apareamiento, muerte, determinismo
-.venv/bin/python tests/learning_test.py     # RL: genoma intacto, cadena de inventario, exploits cerrados
 ```
 
 No hay linter/formatter ni framework de tests configurado (no pytest, no
-ruff, no mypy) — los tres tests son scripts que se ejecutan directos y
-lanzan `AssertionError` si algo falla.
+ruff, no mypy).
 
 ## Arquitectura
 

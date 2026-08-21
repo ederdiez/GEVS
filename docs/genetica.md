@@ -62,5 +62,4 @@ queda sitio, se descarta el nacimiento (raro, documentado).
 
 Todo el azar — ruido inicial, crossover, mutación y el noise del cerebro —
 sale del `rng` del mundo, así que una semilla reproduce la misma trayectoria
-evolutiva (`tests/smoke_agents.py` lo comprueba con dos mundos pisados lado
-a lado).
+evolutiva.

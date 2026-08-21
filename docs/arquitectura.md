@@ -8,7 +8,6 @@ gevs_ia/
 ├── requirements.txt     # Dependencias (pygame).
 ├── .gitignore           # Qué no se versiona (venv, secretos, caches...).
 ├── docs/                # Esta documentación.
-├── tests/               # Smoke tests headless (sin pygame).
 └── sim/                 # El código de la simulación.
     ├── __init__.py      # Marca el paquete `sim`.
     ├── config.py        # ★ TODAS las constantes editables (tamaño, FPS, colores, pesos de la red...).

@@ -281,7 +281,6 @@ tuerce:
   nada, y solo responde la que de verdad hizo algo inusual.
 
 Constantes en `config.py`, sección `# --- Reinforcement learning ---`.
-`tests/learning_test.py` cubre todo lo anterior.
 
 ## El inspector (`sim/inspector.py`)
 
@@ -328,5 +327,3 @@ es redimensionable; `loop.py` reescala la superficie offscreen en
   fijan la tasa de disparo de cada fila (la aritmética está en el comentario
   de `config.py`).
 - **Lo inviolable** no se edita: lo garantiza el cuerpo (`sim/agent.py`).
-- **Probar sin abrir la ventana** → `tests/smoke_agents.py`,
-  `tests/evolution_test.py` y `tests/learning_test.py` (headless).

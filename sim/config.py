@@ -405,4 +405,7 @@ MATE_COOLDOWN_S = 15.0        # s of waiting after mating (also the child's "inf
 MATE_RANGE = 5.0              # cells; mate reflex seeks partners within this radius
 MATE_ENERGY_COST = 0.25       # energy paid by EACH parent (threshold 0.6 - cost 0.25 -> never negative)
 CHILD_INITIAL_ENERGY = 0.80   # the child's starting energy
+
+# --- Logging ---
+LOG_DIR = "logs"              # one file per run, one line per tick
 CHILD_INITIAL_HUNGER = 0.20   # the child's starting hunger

@@ -11,6 +11,7 @@ from sim.drawing import (
     draw_world,
 )
 from sim.inspector import create_inspector_window, draw_inspector
+from sim.tick_log import TickLogger
 from sim.world import World
 
 
@@ -29,6 +30,7 @@ def run(screen: pygame.Surface) -> None:
     """Run the loop until the user closes the window."""
     clock = pygame.time.Clock()
     world = World()
+    tick_log = TickLogger()
     running = True
     selected_agent = None
     inspector = create_inspector_window()
@@ -70,6 +72,7 @@ def run(screen: pygame.Surface) -> None:
             for agent in world.entities:
                 agent.update(dt)
             world.end_frame()
+            tick_log.log(world)
 
         if selected_agent is not None and not selected_agent.alive:
             selected_agent = None
@@ -87,5 +90,6 @@ def run(screen: pygame.Surface) -> None:
         draw_inspector(inspector.surface, selected_agent)
         inspector.flip()
 
+    tick_log.close()
     inspector.destroy()
     pygame.quit()

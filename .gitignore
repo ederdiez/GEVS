@@ -67,6 +67,7 @@ Icon?
 # Datos generados por la simulación
 # ---------------------------------------------------------------------------
 *.log
+logs/
 data/
 resultados/
 capturas/
