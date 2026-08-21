@@ -354,17 +354,23 @@ class Agent:
         if not resting and self.eat_timer <= 0:
             dx = 2.0 * self.move_x - 1.0
             dy = 2.0 * self.move_y - 1.0
-            # Food rush: the nearest food is one cell away and free — go
-            # for it. The brain's other-agent avoidance (negative weight
-            # on other_dir) repels two agents racing for the same food
-            # before either reaches it, so without this they oscillate
-            # forever around the cell. The racer wins the cell claim; the
-            # loser (its food now occupied) re-targets next frame.
-            fd_dx, fd_dy, fdist = self._food_dir()
-            if fdist == 1:
-                # _food_dir already returns deltas (food - cell), so the
-                # rush direction is just that delta.
-                dx, dy = float(fd_dx), float(fd_dy)
+            # Food rush: the nearest food is one cell away, free, and the
+            # agent is actually hungry — go for it. The brain's
+            # other-agent avoidance (negative weight on other_dir) repels
+            # two agents racing for the same food before either reaches
+            # it, so without this they oscillate forever around the cell.
+            # The racer wins the cell claim; the loser (its food now
+            # occupied) re-targets next frame. Gated by hunger so a
+            # satiated agent doesn't get dragged onto food it doesn't
+            # want, blocking it from a neighbor who does (see h0/h1
+            # hunger gates in config.py — same threshold as elsewhere in
+            # this file for "agent cares about food").
+            if self.hunger > cfg.HUNGER_WARNING:
+                fd_dx, fd_dy, fdist = self._food_dir()
+                if fdist == 1:
+                    # _food_dir already returns deltas (food - cell), so
+                    # the rush direction is just that delta.
+                    dx, dy = float(fd_dx), float(fd_dy)
             # Mate reflex (see _mate_eligible/_mate_dir): an eligible
             # partner in MATE_RANGE overrides the brain's movement, the
             # same "inviolable body" pattern as the food rush. The
