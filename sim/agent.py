@@ -69,9 +69,9 @@ class Agent:
         # other agent will move).
         self._holds = {}
 
-        # Detour: rocks and the map border never free, so instead of
-        # holding, slide along the tangent axis for DETOUR_S to walk
-        # around them (see _start_detour).
+        # Detour: rocks and wood never free, so instead of holding, slide
+        # along the tangent axis for DETOUR_S to walk around them (see
+        # _start_detour). The map itself has no border — edges wrap.
         self._detour_axis = None
         self._detour_sign = 0
         self._detour_timer = 0.0
@@ -317,14 +317,17 @@ class Agent:
         reacting to a blocked crossing. One boundary crossing at most per
         call (AGENT_STEP_S * AGENT_SPEED < 1 cell).
 
+        The map has no border: crossing an edge wraps onto the opposite
+        side of the grid (world.wrap), a toroidal ("spherical") world.
+
         A failed crossing clamps the position to the *blocked* side of the
         cell (cx + 0.99 pushing right — not the far edge, which caused the
         old snap-back jitter) and then:
         - another agent owns the cell -> sticky hold: the position stays
           frozen on this axis and the cell is re-probed every
           BLOCKED_PROBE_S (polite wait; the other agent will move);
-        - a rock or the map border -> it will never free, so start a
-          DETOUR_S slide along the tangent axis to walk around it.
+        - a rock or wood -> it will never free, so start a DETOUR_S slide
+          along the tangent axis to walk around it.
         Sliding on the other axis is untouched (each axis is its own call).
         """
         # Zero push (the other axis is doing the work): must not touch the
@@ -352,8 +355,9 @@ class Agent:
                         self.world.release(self.cx, self.cy, self)
                         # Position is already at the blocked boundary
                         # (clamped when the hold was set): no snap to the
-                        # cell center, or the agent would teleport.
-                        self.cx, self.cy = nx, ny
+                        # cell center, or the agent would teleport. Wrapped
+                        # in case the hold was released across the map edge.
+                        self.cx, self.cy = nx % self.world.cols, ny % self.world.rows
                         del self._holds[axis]
             return
 
@@ -366,17 +370,19 @@ class Agent:
         if nx != self.cx:  # crossing an x boundary
             if self.world.try_claim(nx, self.cy, self):
                 self.world.release(self.cx, self.cy, self)
-                self.cx, self.x = nx, new_x
+                # Wrapped: crossing off the left/right edge of the grid
+                # lands on the opposite side (toroidal world, no border).
+                self.cx, self.x = nx % self.world.cols, new_x % self.world.cols
             else:
                 self.x = float(self.cx) + 0.5 + (0.49 if dx_units > 0 else -0.49)
                 if self.world.is_walkable(nx, self.cy):
                     self._holds[axis] = [sign, 0.0]  # another agent: polite wait
                 elif self._detour_timer <= 0.0:
-                    self._start_detour(axis, sign)   # rock or border: walk around
+                    self._start_detour(axis, sign)   # rock: walk around
         elif ny != self.cy:  # crossing a y boundary
             if self.world.try_claim(self.cx, ny, self):
                 self.world.release(self.cx, self.cy, self)
-                self.cy, self.y = ny, new_y
+                self.cy, self.y = ny % self.world.rows, new_y % self.world.rows
             else:
                 self.y = float(self.cy) + 0.5 + (0.49 if dy_units > 0 else -0.49)
                 if self.world.is_walkable(self.cx, ny):
@@ -387,8 +393,9 @@ class Agent:
             self.x, self.y = new_x, new_y
 
     def _start_detour(self, axis: str, sign: int) -> None:
-        """Walk around a rock or the map border (a cell that will never
-        free — holding would freeze the agent forever).
+        """Walk around a rock or wood cell (one that will never free —
+        holding would freeze the agent forever). The map border no longer
+        blocks: edges wrap onto the opposite side of the grid.
 
         First slide along the tangent axis, on the side that reduces
         Manhattan distance to the nearest food (arbitrary side if food is

@@ -20,7 +20,6 @@ WORLD_SEED = 42                # fixed seed -> reproducible world
 
 # --- Cell types (ints) ---
 CELL_EMPTY = 0
-CELL_BORDER = 1               # world limits only (never a cell in the grid)
 CELL_RESOURCE = 2             # food (green)
 CELL_ROCK = 3                 # rock: collidable (future functionality pending)
 CELL_WOOD = 4                 # wood: collidable (future functionality pending)

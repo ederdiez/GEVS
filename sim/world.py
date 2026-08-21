@@ -1,7 +1,8 @@
 """World: a grid of cells, a day/night clock, and the agents inside it.
 
 Pure logic, no pygame (testable headless). Cells are ints, see
-sim.config: CELL_EMPTY, CELL_BORDER, CELL_RESOURCE, CELL_ROCK, CELL_WOOD.
+sim.config: CELL_EMPTY, CELL_RESOURCE, CELL_ROCK, CELL_WOOD. The grid has
+no border: it wraps toroidally (see World.wrap), so a "spherical" world.
 The clock advances in update(dt) and drives the day/night cycle.
 
 Food (resources) can be eaten: the cell empties and regrows after
@@ -135,7 +136,9 @@ class World:
         self.stats_resource_eaten += 1
 
     def try_claim(self, x: int, y: int, agent) -> bool:
-        """Try to occupy cell (x, y). True if the cell is walkable and free."""
+        """Try to occupy cell (x, y), wrapped onto the grid. True if the
+        cell is walkable and free."""
+        x, y = self.wrap(x, y)
         if (x, y) in self.occupied:
             return False
         if not self.is_walkable(x, y):
@@ -145,6 +148,7 @@ class World:
 
     def release(self, x: int, y: int, agent) -> None:
         """Give up the claim on (x, y); only the owner may release it."""
+        x, y = self.wrap(x, y)
         if self.occupied.get((x, y)) is agent:
             del self.occupied[(x, y)]
 
@@ -246,17 +250,22 @@ class World:
 
     # -- query API (what future agents will use) --
 
+    def wrap(self, x, y):
+        """Wrap a coordinate onto the toroidal grid: the world has no edge,
+        crossing one side lands on the opposite one (a "spherical" map).
+        Works for both int cell coordinates and float positions."""
+        return x % self.cols, y % self.rows
+
     def in_bounds(self, x: int, y: int) -> bool:
         return 0 <= x < self.cols and 0 <= y < self.rows
 
     def cell_type(self, x: int, y: int) -> int:
-        """Cell type at (x, y); out of bounds counts as the world border."""
-        if not self.in_bounds(x, y):
-            return cfg.CELL_BORDER
+        """Cell type at (x, y), wrapped onto the grid (no border)."""
+        x, y = self.wrap(x, y)
         return self.grid[y][x]
 
     def is_walkable(self, x: int, y: int) -> bool:
         """True on empty cells and food; rocks and wood are collidable."""
-        return (self.in_bounds(x, y)
-                and self.grid[y][x] != cfg.CELL_ROCK
+        x, y = self.wrap(x, y)
+        return (self.grid[y][x] != cfg.CELL_ROCK
                 and self.grid[y][x] != cfg.CELL_WOOD)
