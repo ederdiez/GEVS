@@ -299,11 +299,13 @@ class Agent:
         else:
             self.state = "active"
 
-        # Personal learning (RL, not genetic): reward grabbing food,
-        # punish sustained hunger. Mutates this agent's own brain only —
-        # self.genome (what reproduction reads) is never touched here.
-        reward = (cfg.REWARD_GRAB_SUCCESS if grabbed else 0.0) \
-            - cfg.PUNISH_HUNGER_SCALE * max(0.0, self.hunger - cfg.HUNGER_WARNING)
+        # Personal learning (RL, not genetic): reward grabbing food only.
+        # No hunger punishment: an agent that was approaching food but
+        # hadn't reached it yet would get its weights pushed away from
+        # the very behavior that was working. Mutates this agent's own
+        # brain only — self.genome (what reproduction reads) is never
+        # touched here.
+        reward = cfg.REWARD_GRAB_SUCCESS if grabbed else 0.0
         self.brain.learn(reward)
 
         # Death: starvation (hunger >= 1.0), exhaustion (energy <= 0), or
