@@ -1,7 +1,7 @@
 # Los agentes: cerebro NN + cuerpo
 
 **La red propone, el cuerpo ejecuta.** Todo el comportamiento sale de una
-red neuronal (`sim/brain.py`, MLP en Python puro: 11 entradas → 6 neuronas
+red neuronal (`sim/brain.py`, MLP en Python puro: 13 entradas → 6 neuronas
 ocultas relu → 7 salidas sigmoid). La red emite *intenciones*; un cuerpo
 (`sim/agent.py`) garantiza lo inviolable: no pisar rocas, no ocupar una
 celda ajena, comer solo donde hay comida, no moverse mientras se descansa,
@@ -20,7 +20,7 @@ objeto llevable nuevo (no comida) es registrar su propio par
 `(interact_fn, drop_fn)` en esa tabla —ambas devuelven `True` si el objeto
 salió del inventario—; el cuerpo nunca hace casos especiales por tipo.
 
-## Entradas de la red (11, normalizadas a [0,1])
+## Entradas de la red (13, normalizadas a [0,1])
 
 Calculadas cada frame en `Agent._inputs()`:
 
@@ -37,6 +37,8 @@ Calculadas cada frame en `Agent._inputs()`:
 | 8 | `other_dir_y` | idem, eje Y |
 | 9 | `other_close` | `1 - min(dist / AGENT_SENSE_RANGE, 1)`; 0 si no hay otro agente en rango |
 | 10 | `has_food`    | 1.0 si el inventario (una ranura) está lleno (lleva un recurso); 0.0 si está vacío |
+| 11 | `pos_x`       | posición absoluta en el mundo, `x / GRID_COLS` (0-1) |
+| 12 | `pos_y`       | posición absoluta en el mundo, `y / GRID_ROWS` (0-1) |
 
 ## Capa oculta (6 detectores legibles, relu)
 
@@ -291,7 +293,7 @@ multi-ventana de pygame 2 / SDL2, `loop.py` la crea con
 `create_inspector_window()`) dibuja en vivo, tick a tick:
 
 - barras de `hunger`/`energy`, generación, edad y estado;
-- el grafo completo de la red — 11 entradas, 6 ocultas, 7 salidas,
+- el grafo completo de la red — 13 entradas, 6 ocultas, 7 salidas,
   coloreado por activación (`Brain.forward_debug`, una copia de `forward`
   que también expone la capa oculta sin efectos secundarios: el hot path
   de cada agente sigue llamando solo a `forward`, así que abrir el

@@ -16,6 +16,7 @@ from sim.drawing import lerp_color
 INPUT_LABELS = [
     "hunger", "energy", "night", "food_dx", "food_dy",
     "food_close", "noise", "other_dx", "other_dy", "other_close", "has_food",
+    "pos_x", "pos_y",
 ]
 HIDDEN_LABELS = ["food_x", "food_y", "sleepy", "night", "food_ahead", "carrying"]
 OUTPUT_LABELS = ["move_x", "move_y", "eat", "rest", "grab", "interact", "drop"]

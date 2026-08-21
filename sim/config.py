@@ -106,7 +106,7 @@ COLOR_AGENT_MATING = (214, 94, 194)    # magenta: in the mate cooldown (recently
 COLOR_AGENT_OUTLINE = (30, 32, 40)     # dark outline on every agent
 
 # --- Brain (neural network) ---
-# MLP: 11 inputs -> 6 hidden relu units -> 7 sigmoid outputs. Pure Python,
+# MLP: 13 inputs -> 6 hidden relu units -> 7 sigmoid outputs. Pure Python,
 # weights hand-tuned below so behavior is sensible. The brain proposes
 # intentions; the agent's body (agent.py) enforces what is inviolable.
 #
@@ -123,10 +123,13 @@ COLOR_AGENT_OUTLINE = (30, 32, 40)     # dark outline on every agent
 #   9 other_close    1 - min(dist / AGENT_SENSE_RANGE, 1); 0 if none in range
 #   10 has_food      1.0 if the one-slot inventory is full (carrying a
 #                    resource), 0.0 if empty
+#   11 pos_x         absolute world position, x / GRID_COLS (0-1)
+#   12 pos_y         absolute world position, y / GRID_ROWS (0-1)
 
 # Hidden layer: 6 readable detectors (relu). One row per unit; columns are
 # inputs 0-6 and 10 (needs, night, food direction, food_close, noise,
-# has_food). The output layer sees all 11 inputs via skip connections
+# has_food); pos_x/pos_y (11, 12) are wired at zero — no detector reads
+# position yet. The output layer sees all 13 inputs via skip connections
 # (see below). Each unit is a condition detector:
 #   h0 food_x     = relu(2*hunger + food_dir_x - 2)  hunger-gated food on X
 #   h1 food_y     = relu(2*hunger + food_dir_y - 2)  hunger-gated food on Y
@@ -143,17 +146,17 @@ COLOR_AGENT_OUTLINE = (30, 32, 40)     # dark outline on every agent
 # directly ahead. Food behind (food_dir < 2 - 2*hunger) never fires, so
 # pursuit never pushes the wrong way.
 BRAIN_W_HIDDEN = [
-    [2.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h0
-    [2.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h1
-    [0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], # h2
-    [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h3
-    [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h4
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],  # h5
+    [2.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h0
+    [2.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h1
+    [0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], # h2
+    [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h3
+    [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h4
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],  # h5
 ]
 BRAIN_B_HIDDEN = [-2.0, -2.0, 0.70, -0.50, -0.20, -0.50]
 
 # Output layer: 7 outputs (move_x, move_y, eat, rest, grab, interact, drop). One row per output;
-# columns are the 6 hidden activations followed by the 11 raw inputs
+# columns are the 6 hidden activations followed by the 13 raw inputs
 # (skip connections: the raw inputs also reach the outputs directly).
 #   move_x, move_y:  direction, 2 * output - 1 in [-1, 1]. Food seeking is
 #                    hunger-gated: the food direction arrives through the
@@ -249,14 +252,14 @@ BRAIN_B_HIDDEN = [-2.0, -2.0, 0.70, -0.50, -0.20, -0.50]
 #                    pushes this row further down; dropping while satiated is
 #                    neutral, leaving room for caching to be discovered.
 BRAIN_W_OUT = [
-    #      h0  h1  h2  h3  h4  h5 | hunger energy night dir_x dir_y close noise oth_x oth_y oth_close has_food
-    [2.4, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  -3.0, 0.0, 0.0, 0.0],  # move_x
-    [0.0, 2.4, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  0.0, -3.0, 0.0, 0.0],  # move_y
-    [0.0, 0.0, 0.0, 0.0, 1.0, 0.0,  20.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # eat
-    [0.0, 0.0, 8.0, 8.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # rest
-    [0.0, 0.0, 0.0, 0.0, 1.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0],  # grab
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.5,  6.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0],  # interact
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0],  # drop
+    #      h0  h1  h2  h3  h4  h5 | hunger energy night dir_x dir_y close noise oth_x oth_y oth_close has_food pos_x pos_y
+    [2.4, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  -3.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # move_x
+    [0.0, 2.4, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  0.0, -3.0, 0.0, 0.0, 0.0, 0.0],  # move_y
+    [0.0, 0.0, 0.0, 0.0, 1.0, 0.0,  20.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # eat
+    [0.0, 0.0, 8.0, 8.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # rest
+    [0.0, 0.0, 0.0, 0.0, 1.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # grab
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.5,  6.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # interact
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # drop
 ]
 # Movement biases: +0.5. The old -0.5 was tuned against a neutral food_dir
 # input (0.5 with no food) that contributed +2.4 * 0.5 = +1.2 to each move

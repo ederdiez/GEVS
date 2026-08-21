@@ -151,7 +151,7 @@ class Agent:
     # -- brain signals --
 
     def _inputs(self) -> list:
-        """The 11 normalized inputs the brain reads (order matches config)."""
+        """The 13 normalized inputs the brain reads (order matches config)."""
         world = self.world
         dx, dy, dist = self._food_dir()
         food_close = 1.0 - min(dist / self.food_sense_range, 1.0) if dist is not None else 0.0
@@ -176,6 +176,10 @@ class Agent:
             # has_food: 1.0 while the one-slot inventory is full (carrying a
             # resource), 0.0 when empty. Pure state, no new randomness.
             1.0 if self.inventory is not None else 0.0,
+            # Absolute world position, normalized to [0,1] by grid size.
+            # Not wired to any behavior yet (all-zero weights, config.py).
+            self.x / world.cols,
+            self.y / world.rows,
         ]
 
     def _food_dir(self):

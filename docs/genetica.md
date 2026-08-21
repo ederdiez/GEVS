@@ -23,7 +23,7 @@ Dos agentes elegibles (energía ≥ `MATE_ENERGY_THRESHOLD`, hambre ≤
 (5 celdas)
 se buscan mutuamente: el reflejo de pareja vive en el **cuerpo** y
 sobreescribe la evitación de la red — el mismo patrón "cuerpo inviolable"
-que el food rush, sin tocar la topología 11→6→7 ni los pesos afinados (la
+que el food rush, sin tocar la topología 13→6→7 ni los pesos afinados (la
 **entrada 9 del cerebro sigue reservada**). A distancia 1 se aparean:
 
 1. Cada padre paga `MATE_ENERGY_COST` y ambos entran en `MATE_COOLDOWN_S`
