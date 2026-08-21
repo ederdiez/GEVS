@@ -425,8 +425,12 @@ class Agent:
             mult = cfg.REWARD_INVENTORY_MEAL_MULT if self._meal_from_inventory else 1.0
             reward += cfg.REWARD_EAT_K * relieved * mult
         # 2. Picking food up is an investment, not a payout — and only for
-        #    food the world grew (see grab_rewarded above).
-        if grabbed and grab_rewarded:
+        #    food the world grew (see grab_rewarded above). Also only if it
+        #    is still in the inventory: grab+interact landing in the same
+        #    tick means it was eaten immediately, i.e. eating off the
+        #    ground by another route (see _interact_resource), which must
+        #    not stack the grab reward on top of the plain meal reward.
+        if grabbed and grab_rewarded and self.inventory is not None:
             reward += cfg.REWARD_GRAB
         # 3. Throwing away food you need.
         if dropped and self.hunger > cfg.HUNGER_WARNING:

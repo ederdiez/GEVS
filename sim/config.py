@@ -322,7 +322,7 @@ TRAIT_MAX = 2.0               # límite superior
 # Así la cadena "recoger -> llevar -> comer" se aprende en vez de estar
 # cableada, y los exploits se cierran solos: dar vueltas recogiendo y
 # soltando comida no sacia nada, luego no paga nada.
-LEARNING_RATE = 0.15          # tasa del ajuste hebbiano (~7x el 0.02 de antes: ver la nota de escala abajo)
+LEARNING_RATE = 0.075          # tasa del ajuste hebbiano (~7x el 0.02 de antes: ver la nota de escala abajo)
 # Qué filas de salida son plásticas en vida: grab, interact, drop. Las
 # demás (move_x, move_y, eat, rest) y toda la capa oculta son INSTINTO —
 # solo la evolución las toca. Una recompensa escalar única no puede decir
@@ -379,10 +379,12 @@ PENALTY_STARVING_WITH_FOOD = -0.4  # por segundo, con hunger > HUNGER_CRITICAL y
 # sueltas y 17 comidas del inventario; a 3.0 s, 256 sueltas y 27 comidas
 # (menos trasiego Y más conducta útil); a 6.0 s la población se hunde,
 # porque bloquear tanto tiempo la única ranura impide recoger lo que sí hace
-# falta. Cierra
-# además el agujero de recoger y comer en el mismo tick (`grab` e `interact`
-# se evalúan en el mismo frame), que habría cobrado el extra de previsión sin
-# haber previsto nada — el mismo reward hacking que las microsiestas.
+# falta. Cierra el agujero del multiplicador de previsión cuando `grab` e
+# `interact` caen en el mismo tick, que habría cobrado el extra sin haber
+# previsto nada — el mismo reward hacking que las microsiestas. El agujero
+# gemelo de REWARD_GRAB (cobrar por recoger *y* por la comida en el mismo
+# tick) lo cierra agent.py comprobando que el inventario siga ocupado tras
+# resolver interact/drop, no CARRY_MIN_S.
 #
 # Nota de fragilidad: la tasa de disparo de una fila es convexa respecto a su
 # bias, así que la media poblacional de la tasa es bastante mayor que la tasa
