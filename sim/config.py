@@ -201,6 +201,20 @@ EAT_OUTPUT_THRESHOLD = 0.5
 REST_OUTPUT_THRESHOLD = 0.6
 GRAB_OUTPUT_THRESHOLD = 0.3
 
+# --- Inspector (per-agent neural network debug window) ---
+INSPECTOR_WINDOW_WIDTH = 380
+INSPECTOR_WINDOW_HEIGHT = 620
+INSPECTOR_WINDOW_TITLE = "GEVS IA — Inspector"
+INSPECTOR_CLICK_RADIUS = 0.6      # cells; max distance from click to select an agent
+COLOR_INSPECTOR_BG = (18, 20, 28)
+COLOR_INSPECTOR_TEXT = (235, 238, 245)
+COLOR_INSPECTOR_MUTED = (140, 146, 165)
+COLOR_NODE_LOW = (40, 46, 62)     # node color at activation 0
+COLOR_NODE_HIGH = (96, 220, 160)  # node color at activation 1
+COLOR_NODE_OUTLINE = (10, 11, 16)
+COLOR_EDGE = (60, 66, 84)
+COLOR_SELECTED_OUTLINE = (255, 224, 90)  # ring around the selected agent, main window
+
 # --- Genetics ---
 # Each agent owns a Genome: the brain weight tables (sim.genetics) plus
 # body traits (multipliers ~1.0 over the base rates above). The initial

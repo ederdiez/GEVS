@@ -49,3 +49,20 @@ class Brain:
             for row, b in zip(self.w_out, self.b_out)
         ]
         return outputs
+
+    def forward_debug(self, inputs) -> tuple:
+        """Like forward(), but also returns the hidden activations.
+
+        For inspection only (sim.inspector): every agent's hot path keeps
+        calling forward(), which stays untouched.
+        """
+        hidden = [
+            _relu(b + sum(w * x for w, x in zip(row, inputs)))
+            for row, b in zip(self.w_hidden, self.b_hidden)
+        ]
+        layer_in = hidden + list(inputs)
+        outputs = [
+            _sigmoid(b + sum(w * x for w, x in zip(row, layer_in)))
+            for row, b in zip(self.w_out, self.b_out)
+        ]
+        return hidden, outputs

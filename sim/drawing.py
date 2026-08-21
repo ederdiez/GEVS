@@ -45,7 +45,7 @@ _AGENT_STATE_COLORS = {
 }
 
 
-def draw_agents(screen: pygame.Surface, world) -> None:
+def draw_agents(screen: pygame.Surface, world, selected=None) -> None:
     """Draw every agent as a circle, colored by state.
 
     active agents turn orange when hungry (hunger >= HUNGER_WARNING);
@@ -54,6 +54,8 @@ def draw_agents(screen: pygame.Surface, world) -> None:
     An agent carrying a resource in its one-slot inventory (inventory
     is not None) shows a small dot above the head in the resource's
     cell color — food for now (green).
+
+    `selected`, if given, gets a highlighted ring (inspector selection).
     """
     for agent in world.entities:
         # Agent.x is in cell units, always inside [cx, cx + 1): the claimed
@@ -77,6 +79,9 @@ def draw_agents(screen: pygame.Surface, world) -> None:
             pygame.draw.circle(screen, cfg.COLOR_AGENT_OUTLINE, dot, 4)
             pygame.draw.circle(screen, _CELL_COLORS.get(agent.inventory,
                                                         cfg.COLOR_CELL_RESOURCE), dot, 3)
+        if agent is selected:
+            pygame.draw.circle(screen, cfg.COLOR_SELECTED_OUTLINE,
+                               (px, py), cfg.AGENT_RADIUS + 4, 2)
 
 
 _night_surf = None
