@@ -70,7 +70,7 @@ RESOURCE_REGROW_S = 40.0   # seconds until an eaten food cell regrows
 FOOD_SENSE_RANGE = 8.0     # cells; beyond this the brain gets no food direction
 AGENT_SENSE_RANGE = 2.0    # cells; "personal space" — nearest-agent sensors below this
 BLOCKED_PROBE_S = 0.5      # s; while holding a blocked cell, re-probe it this often
-REST_WAKE_ENERGY = 0.50    # resting agents stay down until energy >= this (nap latch)
+REST_WAKE_ENERGY = 0.60    # resting agents stay down until energy >= this (nap latch)
 DETOUR_S = 0.4             # s; slide around a rock/border before resuming (2.4 cells at AGENT_SPEED)
 
 # Agent colors (drawing.py): state -> color
