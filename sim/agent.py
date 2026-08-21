@@ -15,6 +15,21 @@ from sim import config as cfg
 from sim.genetics import Genome
 
 
+def _sleep_recovery_rate(t: float) -> float:
+    """Energy recovered per second at *t* seconds continuously asleep.
+
+    Skewed-gaussian bump centered on SLEEP_RECOVERY_PEAK_TIME: a steep
+    climb (light sleep) into the deep-sleep peak, then a slow ease back
+    down to a plateau above the base rate (see config.py). A nap that
+    ends before the climb barely recovered anything.
+    """
+    sigma = (cfg.SLEEP_RECOVERY_SIGMA_RISE if t < cfg.SLEEP_RECOVERY_PEAK_TIME
+             else cfg.SLEEP_RECOVERY_SIGMA_FALL)
+    bump = math.exp(-0.5 * ((t - cfg.SLEEP_RECOVERY_PEAK_TIME) / sigma) ** 2)
+    return cfg.SLEEP_RECOVERY_BASE_RATE + \
+        (cfg.SLEEP_RECOVERY_PEAK_RATE - cfg.SLEEP_RECOVERY_BASE_RATE) * bump
+
+
 def _interact_resource(agent) -> None:
     """Eat the carried food: hands off to the same eat_timer state
     machine used for eating straight off the ground (Agent.update), just
@@ -66,7 +81,7 @@ class Agent:
         self.hunger_rate = cfg.HUNGER_RATE * t["hunger_rate"]
         self.energy_drain_rate = cfg.ENERGY_DRAIN_RATE * t["energy_drain"]
         self.eat_rate = cfg.EAT_RATE * t["eat_rate"]
-        self.rest_rate = cfg.ENERGY_REST_RATE * t["rest_rate"]
+        self.rest_rate_mult = t["rest_rate"]  # scales the sleep recovery curve, not a flat rate
         self.age_s = 0.0
         self.alive = True
         self._mate_cooldown = 0.0
@@ -108,6 +123,7 @@ class Agent:
 
         # Rest latch: once down, stay down until refilled or starving.
         self._resting = False
+        self._sleep_timer = 0.0    # seconds continuously resting; drives the recovery curve
 
     # -- brain signals --
 
@@ -228,6 +244,7 @@ class Agent:
         # stay down until the brain stops demanding rest with energy back
         # above REST_WAKE_ENERGY — starvation breaks the sleep first.
         demands_rest = self.rest_out > cfg.REST_OUTPUT_THRESHOLD
+        was_resting = self._resting
         resting = self._resting or (demands_rest and not starving)
         if resting and (starving or (not demands_rest and self.energy >= cfg.REST_WAKE_ENERGY)):
             resting = False
@@ -275,8 +292,14 @@ class Agent:
         if self.eat_timer > 0:
             pass  # energy frozen while eating
         elif resting:
-            self.energy = min(1.0, self.energy + self.rest_rate * dt)
+            # Interrupted-by-eating naps resume the timer instead of
+            # restarting it (was_resting stays True across the eating
+            # frames above, since the latch itself is untouched by eating).
+            self._sleep_timer = self._sleep_timer + dt if was_resting else dt
+            rate = _sleep_recovery_rate(self._sleep_timer) * self.rest_rate_mult
+            self.energy = min(1.0, self.energy + rate * dt)
         else:
+            self._sleep_timer = 0.0
             self.hunger = min(1.0, self.hunger + self.hunger_rate * dt)
             self.energy = max(0.0, self.energy - self.energy_drain_rate * dt)
 

@@ -83,12 +83,40 @@ exclusivos** — o comes, o duermes, o estás activo, nunca dos a la vez:
 | Régimen | Comportamiento |
 | ------- | -------------- |
 | Despierto | hambre sube a `HUNGER_RATE = 0.024`/s (~1 comida al día); energía se drena a `ENERGY_DRAIN_RATE = 0.013`/s (siestas reales a media mañana) |
-| Descansando | energía recupera a `ENERGY_REST_RATE = 0.045`/s; hambre congelada (dormir congela la necesidad). Un descanso no se interrumpe hasta que la energía vuelve a `REST_WAKE_ENERGY = 0.60` (enclavamiento: sin él, la salida `rest` tiembla en el umbral y la siesta duraría un frame) |
+| Descansando | energía recupera según una curva gaussiana asimétrica sobre el tiempo dormido *seguido* (`SLEEP_RECOVERY_*`, ver abajo), no a una tasa plana; hambre congelada (dormir congela la necesidad). Un descanso no se interrumpe hasta que la energía vuelve a `REST_WAKE_ENERGY = 0.60` (enclavamiento: sin él, la salida `rest` tiembla en el umbral y la siesta duraría un frame) |
 | De noche | todos duermen (luz < 0.5), a no ser que la hambre sea crítica |
 | Comiendo | dura 2 s y baja la hambre 0.9; la comida reaparece a los 40 s |
 
 Estas son las tasas **base**: cada agente las multiplica por sus rasgos
 hereditarios (ver Genética, `TRAIT_MIN`–`TRAIT_MAX`).
+
+### Curva de recuperación del sueño
+
+`ENERGY_REST_RATE` (plana) fue el origen de un problema real: como
+cualquier fracción de segundo dormido ya sumaba energía a la tasa plana,
+la evolución encontró que "dormir" milisegundos repetidamente para ir
+sumando energía en microsiestas era una estrategia viable — nunca se
+pagaba el coste real de parar a dormir. La solución (`sim/agent.py`,
+`_sleep_recovery_rate`) es que la tasa de recuperación por segundo ya no
+es constante: depende de `agent._sleep_timer`, el tiempo que el agente
+lleva dormido *sin interrupción* (se reinicia en cuanto se despierta).
+Sigue una campana gaussiana asimétrica, calibrada en `config.py`
+(`SLEEP_RECOVERY_BASE_RATE`, `_PEAK_RATE`, `_PEAK_TIME`, `_SIGMA_RISE`,
+`_SIGMA_FALL`):
+
+- **Sueño ligero** (`t` cerca de 0): tasa casi nula (`SLEEP_RECOVERY_BASE_RATE`)
+  — una siesta de un frame ya no recupera nada útil.
+- **Sueño profundo** (`t` = `SLEEP_RECOVERY_PEAK_TIME`): pico de recuperación
+  (`SLEEP_RECOVERY_PEAK_RATE`), alcanzado con una subida pronunciada
+  (`SLEEP_RECOVERY_SIGMA_RISE` pequeño).
+- **Después del pico**: la tasa baja de nuevo, pero despacio
+  (`SLEEP_RECOVERY_SIGMA_FALL` >> `SIGMA_RISE`, cola larga a la derecha
+  — de ahí que la campana quede "desplazada a la izquierda" dentro de su
+  propio tramo), así que un descanso largo sigue recuperando energía en
+  vez de estancarse en cero.
+
+El multiplicador hereditario `rest_rate` (rasgo genético) escala la curva
+entera (`agent.rest_rate_mult`), no una tasa plana.
 
 ## Evitación de choques
 

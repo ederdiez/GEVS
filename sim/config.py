@@ -70,7 +70,25 @@ HUNGER_CRITICAL = 0.85     # >= this, survival reflex: keep moving even at night
 EAT_RATE = 0.45            # hunger lost per second while eating
 EAT_DURATION_S = 2.0       # seconds it takes to eat one food cell
 ENERGY_DRAIN_RATE = 0.013  # energy lost per second while awake (full -> sleepy in ~20 s: real mid-day naps)
-ENERGY_REST_RATE = 0.045   # energy gained per second while resting
+
+# Energy recovery while resting is NOT a flat rate: it follows a
+# skewed-gaussian bump over *time continuously asleep* (agent._sleep_timer,
+# reset the instant an agent wakes). This closes the "micro-nap" loophole a
+# flat rate left open — agents were learning to drop into `resting` for a
+# single frame at a time, since even a millisecond of a flat rate nudges
+# energy over REST_WAKE_ENERGY. Now recovery starts near-zero (light
+# sleep), ramps up sharply once truly asleep for a while, peaks at
+# SLEEP_RECOVERY_PEAK_TIME (deep sleep), and eases back down over a long
+# tail (SIGMA_FALL >> SIGMA_RISE shifts the bell's hump toward the left of
+# its own span) rather than dropping back to zero, so a long nap keeps
+# paying off all the way through. A one-frame nap now recovers almost
+# nothing; only committing to real sleep does.
+SLEEP_RECOVERY_BASE_RATE = 0.005    # energy/s at t ~ 0 (just fell asleep)
+SLEEP_RECOVERY_PEAK_RATE = 0.16     # energy/s at the deep-sleep peak
+SLEEP_RECOVERY_PEAK_TIME = 7.0      # s asleep at the deep-sleep peak
+SLEEP_RECOVERY_SIGMA_RISE = 1.5     # s; spread of the climb INTO deep sleep (steep)
+SLEEP_RECOVERY_SIGMA_FALL = 10.0    # s; spread of the ease OUT of deep sleep (long tail)
+
 RESOURCE_REGROW_S = 40.0   # seconds until an eaten food cell regrows
 FOOD_SENSE_RANGE = 8.0     # cells; beyond this the brain gets no food direction
 AGENT_SENSE_RANGE = 2.0    # cells; "personal space" — nearest-agent sensors below this
