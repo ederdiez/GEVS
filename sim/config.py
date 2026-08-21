@@ -22,7 +22,7 @@ SPEED_LEVELS = (1, 2, 4, 8, 16)
 CELL_SIZE = 20                 # px per cell (invariant: GRID_COLS * CELL_SIZE == WINDOW_WIDTH)
 GRID_COLS = 40                 # invariant: GRID_COLS * CELL_SIZE == WINDOW_WIDTH
 GRID_ROWS = 30                 # invariant: GRID_ROWS * CELL_SIZE == WINDOW_HEIGHT
-WORLD_SEED = 42                # fixed seed -> reproducible world
+WORLD_SEED = 5
 
 # --- Cell types (ints) ---
 CELL_EMPTY = 0
