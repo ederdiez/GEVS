@@ -36,6 +36,11 @@ class World:
 
         # --- food (resources that can be eaten and regrow) ---
         self.regrow_timers = {}              # (x, y) -> seconds until regrowth
+        # Food an agent put down rather than food the world grew. Picking it
+        # back up pays no reward (agent.py), which is what stops the
+        # grab -> drop -> grab reward loop: a dropped resource lands on the
+        # dropper's own cell, so it is instantly re-grabbable.
+        self.dropped_cells = set()
         self.stats_resource_eaten = 0
         self.stats_resource_regrown = 0
 
@@ -129,18 +134,35 @@ class World:
     # -- food and claims (used by agents) --
 
     def consume_resource(self, x: int, y: int) -> None:
-        """Eat the food at (x, y): the cell empties and starts regrowing."""
+        """Take the food at (x, y) off the grid: the cell empties and starts
+        regrowing. Both eating off the ground and grabbing into the
+        inventory come through here — this is about the *cell*, not about
+        nutrition, so it does not touch the meal counter (see record_meal)."""
+        x, y = self.wrap(x, y)
         self.grid[y][x] = cfg.CELL_EMPTY
         self.food_cells.discard((x, y))
+        self.dropped_cells.discard((x, y))
         self.regrow_timers[(x, y)] = cfg.RESOURCE_REGROW_S
-        self.stats_resource_eaten += 1
 
     def place_resource(self, x: int, y: int) -> None:
         """Put food at (x, y), e.g. an agent dropping its inventory. The
-        inverse of consume_resource: no regrow timer, it's already there."""
+        inverse of consume_resource: no regrow timer, it's already there.
+        The cell is marked as dropped so re-grabbing it pays no reward."""
+        x, y = self.wrap(x, y)
         self.grid[y][x] = cfg.CELL_RESOURCE
         self.food_cells.add((x, y))
+        self.dropped_cells.add((x, y))
         self.regrow_timers.pop((x, y), None)
+
+    def is_dropped(self, x: int, y: int) -> bool:
+        """True if the food at (x, y) was put there by an agent, not grown."""
+        return self.wrap(x, y) in self.dropped_cells
+
+    def record_meal(self) -> None:
+        """One agent started eating one resource. Counted here rather than
+        in consume_resource so a grab (which empties a cell but feeds
+        nobody) never inflates the stat."""
+        self.stats_resource_eaten += 1
 
     def try_claim(self, x: int, y: int, agent) -> bool:
         """Try to occupy cell (x, y), wrapped onto the grid. True if the

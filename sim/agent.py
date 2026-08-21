@@ -30,26 +30,47 @@ def _sleep_recovery_rate(t: float) -> float:
         (cfg.SLEEP_RECOVERY_PEAK_RATE - cfg.SLEEP_RECOVERY_BASE_RATE) * bump
 
 
-def _interact_resource(agent) -> None:
+def _interact_resource(agent) -> bool:
     """Eat the carried food: hands off to the same eat_timer state
     machine used for eating straight off the ground (Agent.update), just
     without needing to stand on a food cell."""
+
+    # MAS ADELANTE DEBE SER CAMBIADO PARA INTERACTUAR CON CUALQUIER OBJETO, NO SOLLO COMIDA.
+    # ESTA FUCION AHORA SOLO PERMITE COMER.
+    #
+    # The inventory meal only counts as foresight — and only earns the
+    # reward multiplier — if the food was actually carried for a while.
+    # grab and interact are evaluated in the same tick, so without the
+    # minimum an agent could pick up and eat in one frame and collect the
+    # planning bonus without having planned anything (see config.py).
+    # Eating it right away is still allowed: that is just eating off the
+    # ground by another route, and it earns the plain meal reward.
+    agent._meal_from_inventory = agent._carry_time >= cfg.CARRY_MIN_S
     agent.inventory = None
+    agent._carry_time = 0.0
     agent.eat_timer = cfg.EAT_DURATION_S
+    agent.world.record_meal()
+    return True
 
 
-def _drop_resource(agent) -> None:
+def _drop_resource(agent) -> bool:
     """Drop the carried food onto the ground, if the cell under the
-    agent is empty."""
-    if agent.world.cell_type(agent.cx, agent.cy) == cfg.CELL_EMPTY:
-        agent.world.place_resource(agent.cx, agent.cy)
-        agent.inventory = None
+    agent is empty. True if the item actually left the inventory."""
+    if agent._carry_time < cfg.CARRY_MIN_S:
+        return False  # can't put down what you just picked up (see config.py)
+    if agent.world.cell_type(agent.cx, agent.cy) != cfg.CELL_EMPTY:
+        return False
+    agent.world.place_resource(agent.cx, agent.cy)
+    agent.inventory = None
+    agent._carry_time = 0.0
+    return True
 
 
 # Inventory item type -> (interact fn, drop fn). Every carryable type
-# (cfg.CELL_*) registers both under this same shape, so the dispatch in
-# Agent.update() never special-cases food: adding a new carryable item
-# only means adding one entry here.
+# (cfg.CELL_*) registers both under this same shape — both return True if
+# the item left the inventory — so the dispatch in Agent.update() never
+# special-cases food: adding a new carryable item only means adding one
+# entry here.
 _INVENTORY_ACTIONS = {
     cfg.CELL_RESOURCE: (_interact_resource, _drop_resource),
 }
@@ -100,10 +121,12 @@ class Agent:
         self.interact_out = 0.0
         self.drop_out = 0.0
         self.state = "active"      # derived: eating / resting / active
-        # Carried resource (one slot; None or a cfg.CELL_* int). Set by the
-        # grab output; deposit/consume of the inventory is future work, so
-        # once full the slot stays taken until death.
+        # Carried resource (one slot; None or a cfg.CELL_* int). Filled by
+        # the grab output, emptied by interact (use it) or drop (put it
+        # down) — see _INVENTORY_ACTIONS.
         self.inventory = None
+        self._carry_time = 0.0     # s the current inventory item has been held
+        self._meal_from_inventory = False  # did the meal being chewed come from the slot?
 
         # Per-axis sticky hold: axis -> [sign, timer]. While a cell is
         # blocked by another agent, the position freezes on that axis and
@@ -231,8 +254,12 @@ class Agent:
         """Think (brain) and act (body) for dt real seconds."""
         self.age_s += dt
         self._mate_cooldown = max(0.0, self._mate_cooldown - dt)
+        # Hunger at the top of the tick: the reward at the bottom is the
+        # need actually satisfied, not the action taken (see config.py
+        # `# --- Reinforcement learning ---`).
+        hunger_before = self.hunger
         (self.move_x, self.move_y, self.eat_out, self.rest_out, self.grab_out,
-         self.interact_out, self.drop_out) = self.brain.forward(self._inputs())
+         self.interact_out, self.drop_out) = self.brain.forward(self._inputs(), dt)
 
         # Survival reflex (below the brain, like biology): starving agents
         # never stop to rest — keep searching for food.
@@ -258,26 +285,34 @@ class Agent:
         # agent into its one-slot inventory — the cell empties (like
         # eating, same regrow timer) but the food is carried, not consumed.
         # The body enforces the single slot: while the inventory is full,
-        # grab is ignored no matter what the brain demands. Depositing or
-        # consuming the carried resource is future work.
+        # grab is ignored no matter what the brain demands.
         grabbed = False
+        grab_rewarded = False
         if (self.inventory is None
                 and self.grab_out > cfg.GRAB_OUTPUT_THRESHOLD
                 and self.world.cell_type(self.cx, self.cy) == cfg.CELL_RESOURCE):
+            # Food an agent dropped is still food, but picking it back up
+            # earns nothing — otherwise grab -> drop -> grab on one's own
+            # cell would be an infinite reward loop (world.dropped_cells).
+            grab_rewarded = not self.world.is_dropped(self.cx, self.cy)
             self.world.consume_resource(self.cx, self.cy)
             self.inventory = cfg.CELL_RESOURCE
+            self._carry_time = 0.0
             grabbed = True
 
         # Inventory actions: interact (use what's carried — dispatched by
         # item type, see _INVENTORY_ACTIONS) or drop it. Interact is
         # skipped while already eating, so it can't restart the eat_timer
         # mid-meal.
+        dropped = False
         if self.inventory is not None:
             interact_fn, drop_fn = _INVENTORY_ACTIONS[self.inventory]
             if self.interact_out > cfg.INTERACT_OUTPUT_THRESHOLD and self.eat_timer <= 0:
                 interact_fn(self)
             elif self.drop_out > cfg.DROP_OUTPUT_THRESHOLD:
-                drop_fn(self)
+                dropped = drop_fn(self)
+        if self.inventory is not None:
+            self._carry_time += dt
 
         # Eating takes precedence over resting.
         if self.eat_timer > 0:
@@ -287,6 +322,8 @@ class Agent:
                 self.world.cell_type(self.cx, self.cy) == cfg.CELL_RESOURCE:
             self.world.consume_resource(self.cx, self.cy)
             self.eat_timer = cfg.EAT_DURATION_S
+            self._meal_from_inventory = False
+            self.world.record_meal()
 
         # Need rates are exclusive — one regime at a time:
         #   eating:  hunger falls (EAT_RATE above); energy is frozen
@@ -365,13 +402,30 @@ class Agent:
         else:
             self.state = "active"
 
-        # Personal learning (RL, not genetic): reward grabbing food only.
-        # No hunger punishment: an agent that was approaching food but
-        # hadn't reached it yet would get its weights pushed away from
-        # the very behavior that was working. Mutates this agent's own
-        # brain only — self.genome (what reproduction reads) is never
-        # touched here.
-        reward = cfg.REWARD_GRAB_SUCCESS if grabbed else 0.0
+        # Personal learning (RL, not genetic). The ladder rewards the
+        # RESULT, not the act: the eligibility trace (brain.py) is what
+        # carries the credit back to the grab that made a later meal
+        # possible. Mutates this agent's own brain only — self.genome
+        # (what reproduction reads) is never touched here. Every constant
+        # and the reasoning behind it live in config.py.
+        reward = 0.0
+        # 1. The need actually satisfied this tick, wherever the food came from.
+        relieved = hunger_before - self.hunger
+        if relieved > 0.0:
+            mult = cfg.REWARD_INVENTORY_MEAL_MULT if self._meal_from_inventory else 1.0
+            reward += cfg.REWARD_EAT_K * relieved * mult
+        # 2. Picking food up is an investment, not a payout — and only for
+        #    food the world grew (see grab_rewarded above).
+        if grabbed and grab_rewarded:
+            reward += cfg.REWARD_GRAB
+        # 3. Throwing away food you need.
+        if dropped and self.hunger > cfg.HUNGER_WARNING:
+            reward += cfg.PENALTY_DROP_HUNGRY
+        # 4. Starving with the solution in hand. Not the old blanket hunger
+        #    punishment: this needs a full inventory, so the agent still on
+        #    its way to food — the case that broke that attempt — never pays it.
+        if self.inventory is not None and self.hunger > cfg.HUNGER_CRITICAL:
+            reward += cfg.PENALTY_STARVING_WITH_FOOD * dt
         self.brain.learn(reward)
 
         # Death: starvation (hunger >= 1.0), exhaustion (energy <= 0), or

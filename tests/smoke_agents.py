@@ -134,10 +134,13 @@ def main() -> None:
                 sleeping = agent.rest_out > cfg.REST_OUTPUT_THRESHOLD
                 # Personal (in-life) learning can teach an agent to keep
                 # searching instead of sleeping once hunger passes the
-                # warning line — that is the hunger punishment working as
-                # intended, not a bug, so the bound here is HUNGER_WARNING
-                # (not HUNGER_CRITICAL as it was before RL existed).
-                check(sleeping or agent.hunger > cfg.HUNGER_WARNING,
+                # warning line, so the bound here is HUNGER_WARNING (not
+                # HUNGER_CRITICAL as it was before RL existed). An agent
+                # eating what it carried is also legitimately awake: the
+                # interact row is a hunger gate, so hunger was high when the
+                # meal started even if it has dropped since.
+                check(sleeping or agent.hunger > cfg.HUNGER_WARNING
+                      or agent.eat_timer > 0,
                       f"frame {frame}: agente despierto de noche sin hambre ni siquiera de aviso")
             night_energy += sum(a.energy for a in world.entities)
             night_n += len(world.entities)

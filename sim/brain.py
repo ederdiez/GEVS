@@ -1,10 +1,10 @@
 """Brain: a small multilayer perceptron, pure Python (no dependencies).
 
 The MLP is the agent's brain: it receives 11 signals and emits 7
-intentions (movement direction, eat, rest, grab, interact, drop). All weights live in
-sim.config (hand-tuned, readable tables); this module only does the
-forward pass. See config.py `# --- Brain ---` for the meaning of every
-unit and every weight.
+intentions (move_x, move_y, eat, rest, grab, interact, drop). All weights
+live in sim.config (hand-tuned, readable tables); this module only does
+the forward pass. See config.py `# --- Brain ---` for the meaning of
+every unit and every weight.
 
 Each agent builds its own Brain from its Genome's weight tables
 (sim.genetics); the Brain deep-copies them, so it owns independent
@@ -39,12 +39,14 @@ class Brain:
     so a signal like "food direction" can drive movement directly.
 
     Personal learning: forward() also keeps a reward-modulated Hebbian
-    eligibility trace per weight (pre*post activation, decayed each
-    tick). learn(reward) nudges the weights along that trace — no
-    backprop, no gradients. This mutates the Brain's own weight tables,
-    which are always a private copy (see __init__): learning never
-    reaches back into the Genome that built this Brain, so it is never
-    inherited.
+    eligibility trace per output weight (a running average of the
+    pre-activation times the unit's deviation from its own baseline,
+    decaying with a time constant in *seconds*). learn(reward) nudges the
+    weights along that trace — no backprop, no gradients. This mutates the
+    Brain's own weight tables, which are always a private copy (see
+    __init__): learning never reaches back into the Genome that built this
+    Brain, so it is never inherited. Only cfg.LEARNABLE_OUTPUTS change;
+    everything else is instinct that evolution alone reshapes.
     """
 
     def __init__(self, w_hidden, b_hidden, w_out, b_out):
@@ -55,13 +57,25 @@ class Brain:
         self.w_out = [list(row) for row in w_out]
         self.b_out = list(b_out)
 
-        self._elig_w_hidden = [[0.0] * len(row) for row in self.w_hidden]
-        self._elig_b_hidden = [0.0] * len(self.b_hidden)
+        # Traces exist for the output layer only: the hidden layer never
+        # learns in-life (see learn()), so a hidden trace would be work the
+        # hot path does every tick and nothing ever reads.
         self._elig_w_out = [[0.0] * len(row) for row in self.w_out]
         self._elig_b_out = [0.0] * len(self.b_out)
 
-    def forward(self, inputs) -> list:
-        """inputs: list of floats, one per brain input (see config)."""
+        # Running baseline: what each output usually does. The trace credits
+        # the DEVIATION from this, not the raw activation (see
+        # _update_eligibility). None until the first forward() seeds it with
+        # the actual activations, so a brain does not spend its first
+        # seconds unlearning an arbitrary starting guess.
+        self._avg_out = None
+
+    def forward(self, inputs, dt: float) -> list:
+        """inputs: list of floats, one per brain input (see config).
+
+        dt (real seconds this tick) only drives the eligibility decay —
+        the forward pass itself is stateless.
+        """
         hidden = [
             _relu(b + sum(w * x for w, x in zip(row, inputs)))
             for row, b in zip(self.w_hidden, self.b_hidden)
@@ -72,27 +86,61 @@ class Brain:
             _sigmoid(b + sum(w * x for w, x in zip(row, layer_in)))
             for row, b in zip(self.w_out, self.b_out)
         ]
-        self._update_eligibility(inputs, hidden, outputs, layer_in)
+        self._update_eligibility(outputs, layer_in, dt)
         return outputs
 
-    def _update_eligibility(self, inputs, hidden, outputs, layer_in) -> None:
-        """Decay every trace, then add this tick's pre*post correlation.
+    def _update_eligibility(self, outputs, layer_in, dt) -> None:
+        """Blend this tick's pre*deviation correlation into every trace.
+
+        Three properties, each fixing a specific way this rule goes wrong:
+
+        - Exponential moving *average*, not a sum:
+          `e = decay*e + (1-decay)*pre*post`. The old sum saturated at
+          `pre*post / (1 - decay)` — 10x with the old per-tick 0.90, and it
+          would have hit 120x with a tau long enough to credit a grab for a
+          meal eaten seconds later, inflating the learning rate to match.
+        - Decay per *second*, not per tick: `decay = exp(-dt / ELIGIBILITY_TAU_S)`.
+          The old per-tick constant silently coupled the learning dynamics to
+          FPS and to the speed multiplier (loop.py runs the step `speed`
+          times per frame).
+        - `post` is the unit's DEVIATION from its own running baseline, not
+          its raw activation. This is the one that matters most. A raw
+          activation is never negative, so every reward used to reinforce
+          every active unit — including units with nothing to do with it,
+          and biases worst of all, since their input is always 1. Measured
+          on the first calibration run: the `drop` row, which no reward ever
+          referred to, drifted from a 0.2% firing rate to 13% in four
+          simulated minutes purely on this diffuse credit, agents spent
+          their lives picking food up and putting it back down, and the
+          population starved out. Crediting the deviation means a unit
+          sitting at its usual value earns nothing, and only a unit that
+          actually did something unusual — which, for the exploring rows, is
+          exactly what the noise input causes — is held responsible.
 
         Only called from forward() (the hot path Agent.update drives) —
         forward_debug() must stay side-effect-free, or opening the
         inspector on an agent would speed up its learning.
         """
-        decay = cfg.ELIGIBILITY_DECAY
-        self._elig_w_hidden = [
-            [decay * e + h * x for e, x in zip(erow, inputs)]
-            for erow, h in zip(self._elig_w_hidden, hidden)
-        ]
-        self._elig_b_hidden = [decay * e + h for e, h in zip(self._elig_b_hidden, hidden)]
+        if self._avg_out is None:
+            self._avg_out = list(outputs)
+        d_out = [o - a for o, a in zip(outputs, self._avg_out)]
+
+        decay = math.exp(-dt / cfg.ELIGIBILITY_TAU_S)
+        keep = 1.0 - decay
         self._elig_w_out = [
-            [decay * e + o * x for e, x in zip(erow, layer_in)]
-            for erow, o in zip(self._elig_w_out, outputs)
+            [decay * e + keep * d * x for e, x in zip(erow, layer_in)]
+            for erow, d in zip(self._elig_w_out, d_out)
         ]
-        self._elig_b_out = [decay * e + o for e, o in zip(self._elig_b_out, outputs)]
+        self._elig_b_out = [decay * e + keep * d
+                            for e, d in zip(self._elig_b_out, d_out)]
+
+        # The baseline moves on its own, slower clock: fast enough to follow
+        # a real change of regime, slow enough that a burst still reads as a
+        # deviation instead of instantly becoming "normal".
+        b_decay = math.exp(-dt / cfg.BASELINE_TAU_S)
+        b_keep = 1.0 - b_decay
+        self._avg_out = [b_decay * a + b_keep * o
+                         for a, o in zip(self._avg_out, outputs)]
 
     def learn(self, reward: float) -> None:
         """Reward-modulated Hebbian update: w += LEARNING_RATE * reward * eligibility.
@@ -101,22 +149,28 @@ class Brain:
         is a no-op. Positive reward reinforces the weights that recently
         contributed to the current activations; negative reward pushes
         them the other way. Clamped to the same bounds as genetic weights.
+
+        Only the rows in cfg.LEARNABLE_OUTPUTS change, and the hidden layer
+        never does — evolution shapes the senses, life shapes what you do
+        with them. A single scalar reward cannot say which row earned it,
+        so without this split the food reward rewrites circuits it knows
+        nothing about: measured before it existed, learning wrote a `noise`
+        weight into the `rest` row, whose inputs are otherwise constant, and
+        an agent's sleep drive started flickering frame to frame right at
+        its threshold — it stopped sleeping at night on a full stomach.
+        The hand-tuned rows are instinct, and their margins (the 20x hunger
+        weight on `eat`, the 8.0 night weight on `rest`) exist precisely to
+        survive drift; letting a diffuse Hebbian signal erode them destroys
+        the thing those margins protect. They still evolve — mutation
+        reaches every weight — just not within one lifetime.
         """
         if reward == 0.0:
             return
         lr = cfg.LEARNING_RATE
-        self.w_hidden = [
-            [_clamp(w + lr * reward * e) for w, e in zip(row, erow)]
-            for row, erow in zip(self.w_hidden, self._elig_w_hidden)
-        ]
-        self.b_hidden = [_clamp(b + lr * reward * e)
-                          for b, e in zip(self.b_hidden, self._elig_b_hidden)]
-        self.w_out = [
-            [_clamp(w + lr * reward * e) for w, e in zip(row, erow)]
-            for row, erow in zip(self.w_out, self._elig_w_out)
-        ]
-        self.b_out = [_clamp(b + lr * reward * e)
-                       for b, e in zip(self.b_out, self._elig_b_out)]
+        for i in cfg.LEARNABLE_OUTPUTS:
+            self.w_out[i] = [_clamp(w + lr * reward * e)
+                             for w, e in zip(self.w_out[i], self._elig_w_out[i])]
+            self.b_out[i] = _clamp(self.b_out[i] + lr * reward * self._elig_b_out[i])
 
     def forward_debug(self, inputs) -> tuple:
         """Like forward(), but also returns the hidden activations.

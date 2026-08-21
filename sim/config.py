@@ -190,36 +190,73 @@ BRAIN_B_HIDDEN = [-2.0, -2.0, 0.70, -0.50, -0.20, -0.50]
 #   other_close (col 15): 0 everywhere, RESERVED for future training — a
 #                    linear output cannot multiply closeness x direction, so
 #                    distance modulation would need a hidden detector.
+#
+# grab/interact/drop are the *learned* rows: weak instinct + exploration +
+# reinforcement, instead of the all-zero tables they used to have. Those
+# tables were unreachable by construction — output pinned at sigmoid(-2) ~
+# 0.12 against a 0.4 threshold, while the only reward in the simulation
+# required a successful grab. Measured on 20 simulated minutes and 22
+# generations: zero grabs ever, grab_out drifting no higher than 0.26. The
+# whole RL system was dead code. Now:
+#
+#   1. INSTINCT (weights below): small hand-tuned weights that bring the row
+#      *close* to the threshold in the right context but never cross it alone.
+#   2. EXPLORATION (weight 3.0 on the noise column, 12): the noise input
+#      already feeds movement; giving it weight here too makes the row fire
+#      occasionally — motor babbling. It adds NO new rng draw (noise is
+#      sampled once per _inputs(), agent.py), so determinism is untouched.
+#   3. REINFORCEMENT: the reward ladder (see `# --- Reinforcement learning ---`)
+#      grows the signal weights until they dominate the noise. Exploration is
+#      self-limiting — the noise weight is a weight like any other, so
+#      babbling that ends badly gets pushed back down by learn().
+#
+# Firing rates below are per tick, for u = noise ~ U[0,1); a row fires when
+# `noise_w * u + signal + bias > -0.406` (the sigmoid pre-activation for the
+# 0.4 threshold).
+#
 #   grab:            pick up the food under the agent into its one-slot
-#                    inventory (the cell empties, the agent carries the
-#                    food; deposit/consume of the inventory is future work).
-#                    NOT hand-tuned: every weight is 0 and the bias is -2.0
-#                    (sigmoid(-2) ~ 0.12, far below the threshold), so
-#                    grabbing must be discovered by mutation drift over
-#                    generations — it may never emerge. A usable policy
-#                    needs pre-activation > 0, e.g. a weight ~ +2.1 on
-#                    food_close (col 11) or on h4 (food_ahead, col 4); h5
-#                    (carrying, col 5) and has_food (col 16) tell the brain
-#                    the inventory is full, to decide what to do with it.
+#                    inventory (the cell empties, like eating, but the food
+#                    is carried instead of consumed). Instinct: +1.0 on h4
+#                    (food_ahead), which is 0.8 while standing on food.
+#                    With bias -3.36 and noise weight 3.0: ~1.5% per tick
+#                    with no food around (harmless — the body blocks a grab
+#                    off a food cell anyway) and ~28% per tick while standing
+#                    on food, so an agent that walks over food picks it up
+#                    within a few frames. NOT hunger-gated on purpose:
+#                    grabbing while satiated is the interesting behavior
+#                    (carrying a spare meal), and hunger gates the *eating*
+#                    of it through the interact row below.
 #   interact:        use whatever is in the one-slot inventory — for food
 #                    that means eating it (same eat_timer state machine as
 #                    eating off the ground, see agent.py); other future
 #                    carryable items each define their own interact
-#                    behavior, dispatched by item type. Like grab, NOT
-#                    hand-tuned (weights 0, bias -2.0): discovered by
-#                    mutation drift.
+#                    behavior, dispatched by item type. Instinct: +6.0 on
+#                    hunger (col 6) and +0.5 on h5 (carrying, 0.5 when the
+#                    inventory is full). The big hunger weight makes this a
+#                    sharp hunger gate, deliberately lined up with the eat
+#                    row's ~0.53 crossing: with bias -6.9 the rate is ~0 below
+#                    hunger 0.5, ~2% at 0.55, ~32% at 0.7 and ~92% at 1.0.
+#                    So a carried meal is kept until hunger actually calls
+#                    for it — that is the behavior worth having. Like the eat
+#                    row, the 6.0 weight is also drift margin: a mutation of
+#                    ±0.2 shifts the hunger crossing by only ±0.03.
 #   drop:            release the inventory onto the ground under the agent
-#                    (only onto an empty cell). Same NOT-hand-tuned pattern
-#                    as grab/interact.
+#                    (only onto an empty cell). No instinct at all — dropping
+#                    is not obviously smart, so it stays pure exploration at
+#                    a deliberately low rate (bias -3.40 -> ~0.05% per tick,
+#                    roughly once per 30 s of carrying). Dropping food while
+#                    hungry is punished (PENALTY_DROP_HUNGRY), so learning
+#                    pushes this row further down; dropping while satiated is
+#                    neutral, leaving room for caching to be discovered.
 BRAIN_W_OUT = [
     #      h0  h1  h2  h3  h4  h5 | hunger energy night dir_x dir_y close noise oth_x oth_y oth_close has_food
     [2.4, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  -3.0, 0.0, 0.0, 0.0],  # move_x
     [0.0, 2.4, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  0.0, -3.0, 0.0, 0.0],  # move_y
     [0.0, 0.0, 0.0, 0.0, 1.0, 0.0,  20.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # eat
     [0.0, 0.0, 8.0, 8.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # rest
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # grab
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # interact
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # drop
+    [0.0, 0.0, 0.0, 0.0, 1.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0],  # grab
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.5,  6.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0],  # interact
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0],  # drop
 ]
 # Movement biases: +0.5. The old -0.5 was tuned against a neutral food_dir
 # input (0.5 with no food) that contributed +2.4 * 0.5 = +1.2 to each move
@@ -229,9 +266,12 @@ BRAIN_W_OUT = [
 # i.e. [-1.0, +1.0] — symmetric, slightly livelier than the old
 # [-0.8, +0.8].
 # eat bias: -10.5 pairs with the 20.0 hunger skip (see the eat comment
-# above). grab/interact/drop biases: -2.0, negative on purpose — see the
-# grab row comment.
-BRAIN_B_OUT = [0.5, 0.5, -10.5, -1.0, -2.0, -2.0, -2.0]
+# above). grab/interact/drop biases set the exploration floor of each
+# learned row against BRAIN_EXPLORE_NOISE_W (see the block comment above
+# BRAIN_W_OUT for the firing-rate arithmetic): -3.36 -> grab babbles ~1.5%
+# of ticks, -6.9 -> interact is a sharp hunger gate crossing near 0.55,
+# -3.40 -> drop babbles ~0.05% of ticks.
+BRAIN_B_OUT = [0.5, 0.5, -10.5, -1.0, -3.36, -6.9, -3.40]
 
 # Output thresholds: above these, the body acts on the intention.
 EAT_OUTPUT_THRESHOLD = 0.5
@@ -272,12 +312,87 @@ TRAIT_MAX = 2.0               # límite superior
 # agent.brain empieza como copia exacta de los pesos del genoma y se ajusta
 # en vida con una regla Hebbiana modulada por recompensa (sin backprop). El
 # genoma nunca se toca: lo aprendido no se hereda.
-LEARNING_RATE = 0.02          # tasa del ajuste hebbiano
-ELIGIBILITY_DECAY = 0.90      # decaimiento por tick de la traza de elegibilidad
-REWARD_GRAB_SUCCESS = 1.0     # recompensa al recoger comida con éxito
-# Sin castigo por hambre: penalizar el hambre sostenido también castigaba a
-# agentes que se estaban acercando a la comida sin haber llegado aún,
-# empujando los pesos en contra del comportamiento que sí estaba funcionando.
+#
+# PRINCIPIO: se recompensa el RESULTADO, no el acto. La recompensa es el
+# hambre realmente saciada; la traza de elegibilidad, al durar segundos, es
+# la que reparte el crédito hacia atrás hasta el `grab` que lo hizo posible.
+# Así la cadena "recoger -> llevar -> comer" se aprende en vez de estar
+# cableada, y los exploits se cierran solos: dar vueltas recogiendo y
+# soltando comida no sacia nada, luego no paga nada.
+LEARNING_RATE = 0.15          # tasa del ajuste hebbiano (~7x el 0.02 de antes: ver la nota de escala abajo)
+# Qué filas de salida son plásticas en vida: grab, interact, drop. Las
+# demás (move_x, move_y, eat, rest) y toda la capa oculta son INSTINTO —
+# solo la evolución las toca. Una recompensa escalar única no puede decir
+# qué fila se la ganó, así que sin esta separación la recompensa por comida
+# reescribe circuitos que no tienen nada que ver: medido antes de existir,
+# el aprendizaje le escribió un peso de `noise` a la fila `rest` —cuyas
+# entradas son constantes— y el sueño de un agente empezó a parpadear frame
+# a frame justo en su umbral, dejando de dormir de noche con el estómago
+# lleno. Los márgenes afinados a mano (el peso 20x del hambre en `eat`, el
+# 8.0 de la noche en `rest`) existen precisamente para sobrevivir a la
+# deriva; dejar que una señal hebbiana difusa los erosione destruye justo
+# lo que protegen.
+LEARNABLE_OUTPUTS = (4, 5, 6)  # índices de fila en BRAIN_W_OUT
+ELIGIBILITY_TAU_S = 2.5       # s; constante de tiempo de la traza de elegibilidad
+BASELINE_TAU_S = 10.0         # s; constante de tiempo de "lo que esta neurona suele hacer"
+# La traza acredita la DESVIACIÓN de cada neurona respecto a su línea base,
+# no su activación bruta. Sin esto la regla tiene crédito difuso: como la
+# activación nunca es negativa, cualquier recompensa refuerza toda salida
+# activa, tuviera o no que ver — y los biases más que nadie, porque su
+# entrada es siempre 1. Medido en la primera calibración: la fila `drop`, a
+# la que ninguna recompensa se refiere, pasó de una tasa de disparo del 0.2%
+# al 13% en cuatro minutos simulados solo por esa deriva, los agentes se
+# dedicaron a recoger y soltar comida sin parar, y la población se extinguió.
+# Escala: la traza es una media móvil (brain.py), no una suma, y de una
+# desviación en vez de una activación — ambas cosas la hacen mucho menor, y
+# por eso LEARNING_RATE sube desde el 0.02 de antes. La suma antigua
+# saturaba en 10x el producto pre*post con el decaimiento 0.90 por tick, así
+# que llevaba esa ganancia incorporada, y habría saturado en 120x con un tau
+# lo bastante largo para acreditar un `grab` por una comida que llega
+# segundos después. Medido: a 0.5 la población cae a 7 en dos minutos; a
+# 0.15 se mantiene en 15 y sigue creciendo.
+#
+# La escalera de recompensas. Cada peldaño responde a "¿qué necesidad se
+# satisfizo?", nunca a "¿qué acción se ejecutó?":
+REWARD_EAT_K = 3.0            # por unidad de hambre saciada (comer, venga de donde venga)
+REWARD_INVENTORY_MEAL_MULT = 1.5  # comer del inventario paga más: requirió previsión
+CARRY_MIN_S = 3.0             # s mínimos que un objeto se queda en el inventario
+REWARD_GRAB = 0.15            # recoger es una inversión, no un pago
+PENALTY_DROP_HUNGRY = -0.5    # soltar comida con hunger > HUNGER_WARNING: desperdicio
+PENALTY_STARVING_WITH_FOOD = -0.4  # por segundo, con hunger > HUNGER_CRITICAL y comida encima
+#
+# Por qué REWARD_EAT_K domina: una comida completa sacia hasta 0.9 de hambre
+# (EAT_RATE * EAT_DURATION_S), o sea paga hasta ~2.7 (~4.0 si venía del
+# inventario) frente a los 0.15 de recoger. Recoger nunca puede convertirse
+# en un fin en sí mismo.
+#
+# CARRY_MIN_S: no puedes soltar lo que acabas de coger, y no cobras el extra
+# de previsión por una comida que no llegaste a llevar. Es el mismo
+# enclavamiento del cuerpo que REST_WAKE_ENERGY, y por la misma razón: una
+# salida que ronda su umbral produce parpadeo de un frame en vez de conducta.
+# Medido sin él: la mediana de tiempo en el inventario era de 0.10 s y los
+# agentes recogían y soltaban comida 50 veces por cada vez que comían. El
+# valor no es indiferente — barrido sobre 5 min simulados: a 1.0 s salen 703
+# sueltas y 17 comidas del inventario; a 3.0 s, 256 sueltas y 27 comidas
+# (menos trasiego Y más conducta útil); a 6.0 s la población se hunde,
+# porque bloquear tanto tiempo la única ranura impide recoger lo que sí hace
+# falta. Cierra
+# además el agujero de recoger y comer en el mismo tick (`grab` e `interact`
+# se evalúan en el mismo frame), que habría cobrado el extra de previsión sin
+# haber previsto nada — el mismo reward hacking que las microsiestas.
+#
+# Nota de fragilidad: la tasa de disparo de una fila es convexa respecto a su
+# bias, así que la media poblacional de la tasa es bastante mayor que la tasa
+# del bias medio (Jensen), y una mutación de ±0.2 sobre un bias de -3.4
+# multiplica la tasa de `drop` por un factor grande. Por eso el enclavamiento
+# vive en el cuerpo: acota la conducta pase lo que pase con los pesos.
+#
+# PENALTY_STARVING_WITH_FOOD NO es el castigo por hambre que se retiró: exige
+# llevar comida en el inventario. Aquel castigaba también al agente que iba
+# camino de la comida sin haber llegado —empujando los pesos en contra del
+# comportamiento que sí funcionaba—, y ese agente tiene el inventario vacío,
+# así que nunca lo cobra. Aquí solo se castiga a quien lleva la solución
+# encima y no la usa.
 
 # --- Death and population ---
 MAX_AGE_S = 300.0             # s; death by old age (5 simulated days)

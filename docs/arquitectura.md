@@ -31,8 +31,9 @@ main.py
         1. eventos (cerrar ventana, clic → seleccionar agente, resize del
            inspector, +/- → cambia el multiplicador de velocidad...)
         2. world.update(dt)   →  reloj + regrow de comida
-           + cada agente: brain.forward() (+ traza de elegibilidad) + cuerpo
-             (movimiento, comer, descansar, aparearse) + brain.learn(reward)
+           + cada agente: brain.forward(inputs, dt) (+ traza de elegibilidad)
+             + cuerpo (movimiento, comer, descansar, recoger/usar/soltar el
+             inventario, aparearse) + brain.learn(reward)
            + world.end_frame() → materializa las muertes y nacimientos diferidos
            — este paso se repite `speed` veces por frame dibujado (ver
            "Velocidad de simulación" abajo)

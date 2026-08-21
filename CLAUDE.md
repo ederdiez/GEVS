@@ -25,10 +25,11 @@ python3 -m venv .venv
 # Tests headless (sin pygame, sin pytest — scripts autocontenidos)
 .venv/bin/python tests/smoke_agents.py      # 9000 frames, invariantes de agentes/mundo/genética
 .venv/bin/python tests/evolution_test.py    # genética, apareamiento, muerte, determinismo
+.venv/bin/python tests/learning_test.py     # RL: genoma intacto, cadena de inventario, exploits cerrados
 ```
 
 No hay linter/formatter ni framework de tests configurado (no pytest, no
-ruff, no mypy) — los dos tests son scripts que se ejecutan directos y
+ruff, no mypy) — los tres tests son scripts que se ejecutan directos y
 lanzan `AssertionError` si algo falla.
 
 ## Arquitectura
@@ -41,7 +42,7 @@ ventana y arranca `loop.run()`. Módulos, por responsabilidad única:
 | `sim/config.py` | **Toda** constante editable: tamaño, FPS, colores, densidades, ritmos, umbrales, y las matrices de pesos afinadas a mano de la red. Nada de números mágicos en el resto del código. |
 | `sim/world.py` | Lógica pura del mundo (sin pygame, testeable headless): grid toroidal, reloj día/noche, comida, claims de celda, nacimientos/muertes diferidos. |
 | `sim/agent.py` | El cuerpo del agente: ejecuta las intenciones del cerebro garantizando lo inviolable (no atravesar rocas, no pisar una claim ajena, comer solo con comida debajo...). Construye las 11 entradas de la red en `_inputs()`. |
-| `sim/brain.py` | MLP en Python puro (11→6→5) + aprendizaje Hebbiano personal (`learn()`, traza de elegibilidad, no heredable). |
+| `sim/brain.py` | MLP en Python puro (11→6→7) + aprendizaje Hebbiano personal (`learn()`, traza de elegibilidad, no heredable). |
 | `sim/genetics.py` | El genoma (pesos + 6 rasgos hereditarios): crossover, mutación, clon. Única unidad de herencia. |
 | `sim/drawing.py` | Una función de dibujo por capa/elemento, llamadas en orden fijo desde `loop.py`. |
 | `sim/inspector.py` | Segunda ventana OS: red neuronal en vivo del agente seleccionado. |

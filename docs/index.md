@@ -39,8 +39,10 @@ Principios del proyecto:
   mundo: misma semilla → misma trayectoria evolutiva. Ver
   [Genética](genetica.md).
 - ✅ **Aprendizaje personal (RL Hebbiano)** — cada agente ajusta su propio
-  cerebro en vida (recompensa al recoger comida), sin tocar el genoma: lo
-  aprendido no se hereda. Ver [Agentes → Aprendizaje personal](agentes.md).
+  cerebro en vida con una escalera de recompensas que premia el *resultado*
+  (el hambre saciada), no el acto; la cadena "recoger → llevar → comer" se
+  aprende, no está cableada. Sin tocar el genoma: lo aprendido no se hereda.
+  Ver [Agentes → Aprendizaje personal](agentes.md).
 - ✅ **Mundo toroidal** — el grid no tiene borde; cruzar un extremo
   envuelve al lado opuesto. Ver [Mundo](mundo.md).
 - ✅ **Inspector de agente** — clic sobre un agente para abrir una segunda
@@ -54,8 +56,9 @@ Principios del proyecto:
    (pesos + rasgos del cuerpo), se reproduce sexualmente por encuentro y
    muere.
 3. ✅ **(bases) Aprendizaje personal** — RL Hebbiano en vida, sin backprop,
-   separado del genoma (no heredable). Pendiente: selección con fitness
-   explícita si hace falta.
+   separado del genoma (no heredable): instinto débil + exploración por
+   ruido + escalera de recompensas por necesidad satisfecha. Pendiente:
+   selección con fitness explícita si hace falta.
 4. **Memoria e interacción** — comunicación y recuerdos entre agentes.
 5. **Sociedades** — estructuras emergentes visibles en pantalla.
 

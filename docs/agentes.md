@@ -9,16 +9,16 @@ buscar pareja cuando es el momento. Así la red puede ser torpe y la
 simulación nunca se rompe. Desde la genética, cada agente tiene **su propio
 cerebro**: los pesos vienen de su genoma, no de una tabla compartida.
 
-Las salidas `grab`, `interact` y `drop` no están ajustadas a mano: parten
-con pesos a cero y bias −2.0, por lo que esos comportamientos deben ser
-descubiertos por mutación a lo largo de generaciones (pueden no surgir
-nunca). El cuerpo limita el inventario a un único recurso por agente.
-`interact`/`drop` despachan según el tipo de objeto llevado
-(`Agent._INVENTORY_ACTIONS` en `agent.py`): para comida, `interact` la
-come (mismo `eat_timer` que comer del suelo) y `drop` la deja caer sobre
-una celda vacía. Añadir un objeto llevable nuevo (no comida) es registrar
-su propio par `(interact_fn, drop_fn)` en esa tabla; el cuerpo nunca hace
-casos especiales por tipo.
+Las salidas `grab`, `interact` y `drop` son las **filas aprendidas**:
+instinto débil + exploración + refuerzo (ver [Aprendizaje
+personal](#aprendizaje-personal-no-genético)). El cuerpo limita el
+inventario a un único recurso por agente. `interact`/`drop` despachan
+según el tipo de objeto llevado (`_INVENTORY_ACTIONS`, constante de módulo
+en `agent.py`): para comida, `interact` la come (mismo `eat_timer` que
+comer del suelo) y `drop` la deja caer sobre una celda vacía. Añadir un
+objeto llevable nuevo (no comida) es registrar su propio par
+`(interact_fn, drop_fn)` en esa tabla —ambas devuelven `True` si el objeto
+salió del inventario—; el cuerpo nunca hace casos especiales por tipo.
 
 ## Entradas de la red (11, normalizadas a [0,1])
 
@@ -66,9 +66,9 @@ hacia el lado equivocado.
 | `move_x`, `move_y` | dirección deseada (`2v−1 ∈ [−1,1]`) | avanzar a `AGENT_SPEED` celdas/s, con claims por eje; celda bloqueada → sostén pegajoso por eje (sin temblor) + re-sondeo cada `BLOCKED_PROBE_S`, o rodeo de `DETOUR_S` si la celda es una roca o madera (ver Evitación de choques). El mapa no tiene borde: cruzar un extremo envuelve al lado opuesto (mundo toroidal, ver [Mundo](mundo.md)) |
 | `eat`        | comer            | si `eat > EAT_OUTPUT_THRESHOLD` (0.5) y el agente está sobre comida → comer (celda se vacía, regrow) |
 | `rest`       | descansar        | si `rest > REST_OUTPUT_THRESHOLD` (0.6) → no moverse y recuperar energía |
-| `grab`       | recoger          | si `grab > GRAB_OUTPUT_THRESHOLD` (0.12) y hay comida bajo el agente → pasa a su inventario (una ranura); la celda se vacía (mismo timer de regrow que comer) pero la comida se lleva, no se consume. El cuerpo ignora `grab` si el inventario está lleno. |
-| `interact`   | usar lo llevado  | si `interact > INTERACT_OUTPUT_THRESHOLD` (0.12), hay algo en el inventario y el agente no está ya comiendo → dispatch por tipo de objeto; para comida, arranca el mismo `eat_timer` que comer del suelo y vacía el inventario. |
-| `drop`       | soltar lo llevado | si `drop > DROP_OUTPUT_THRESHOLD` (0.12), hay algo en el inventario y la celda del agente está vacía → dispatch por tipo de objeto; para comida, la deja en el suelo (`world.place_resource`) y vacía el inventario. |
+| `grab`       | recoger          | si `grab > GRAB_OUTPUT_THRESHOLD` (0.4) y hay comida bajo el agente → pasa a su inventario (una ranura); la celda se vacía (mismo timer de regrow que comer) pero la comida se lleva, no se consume. El cuerpo ignora `grab` si el inventario está lleno. |
+| `interact`   | usar lo llevado  | si `interact > INTERACT_OUTPUT_THRESHOLD` (0.4), hay algo en el inventario y el agente no está ya comiendo → dispatch por tipo de objeto; para comida, arranca el mismo `eat_timer` que comer del suelo y vacía el inventario. |
+| `drop`       | soltar lo llevado | si `drop > DROP_OUTPUT_THRESHOLD` (0.4), hay algo en el inventario y la celda del agente está vacía → dispatch por tipo de objeto; para comida, la deja en el suelo (`world.place_resource`) y vacía el inventario. |
 
 **Reflejo de supervivencia** (por debajo del cerebro, como en la biología):
 si `hunger > HUNGER_CRITICAL` (0.85), el agente ignora `rest` y sigue
@@ -82,10 +82,10 @@ exclusivos** — o comes, o duermes, o estás activo, nunca dos a la vez:
 
 | Régimen | Comportamiento |
 | ------- | -------------- |
-| Despierto | hambre sube a `HUNGER_RATE = 0.024`/s (~1 comida al día); energía se drena a `ENERGY_DRAIN_RATE = 0.013`/s (siestas reales a media mañana) |
-| Descansando | energía recupera según una curva gaussiana asimétrica sobre el tiempo dormido *seguido* (`SLEEP_RECOVERY_*`, ver abajo), no a una tasa plana; hambre congelada (dormir congela la necesidad). Un descanso no se interrumpe hasta que la energía vuelve a `REST_WAKE_ENERGY = 0.60` (enclavamiento: sin él, la salida `rest` tiembla en el umbral y la siesta duraría un frame) |
+| Despierto | hambre sube a `HUNGER_RATE = 0.024`/s (~1 comida al día); energía se drena a `ENERGY_DRAIN_RATE = 0.016`/s (siestas reales a media mañana) |
+| Descansando | energía recupera según una curva gaussiana asimétrica sobre el tiempo dormido *seguido* (`SLEEP_RECOVERY_*`, ver abajo), no a una tasa plana; hambre congelada (dormir congela la necesidad). Dormirse exige un mínimo de energía (`MIN_ENERGY_TO_REST = 0.50`: el agente exhausto no puede permitirse parar) y un descanso no se interrumpe hasta que la energía vuelve a `REST_WAKE_ENERGY = 0.60` (enclavamiento: sin él, la salida `rest` tiembla en el umbral y la siesta duraría un frame). Como la energía solo sube mientras se duerme, el mínimo solo compuerta el *inicio* de la siesta |
 | De noche | todos duermen (luz < 0.5), a no ser que la hambre sea crítica |
-| Comiendo | dura 2 s y baja la hambre 0.9; la comida reaparece a los 40 s |
+| Comiendo | dura 2 s y baja la hambre 0.9; la comida reaparece a los 30 s (`RESOURCE_REGROW_S`) |
 
 Estas son las tasas **base**: cada agente las multiplica por sus rasgos
 hereditarios (ver Genética, `TRAIT_MIN`–`TRAIT_MAX`).
@@ -167,26 +167,121 @@ Perillas de afinado (todas en `config.py`): el peso de evitación (3.0),
 
 Además del genoma (ver [Genética](genetica.md)), cada agente aprende **en
 vida** con una regla Hebbiana modulada por recompensa — sin backprop, sin
-gradientes:
+gradientes. `Brain.__init__` (`sim/brain.py`) copia en profundidad las
+tablas del genoma: el `Brain` es dueño de sus propios pesos desde el
+nacimiento, y `learn()` puede mutarlos sin tocar jamás el `Genome` que lo
+construyó (lo único que `crossover`/`mutate` ven). **Lo aprendido vive y
+muere con el agente: no se hereda.**
 
-- `Brain.__init__` (`sim/brain.py`) copia en profundidad las tablas del
-  genoma: el `Brain` es dueño de sus propios pesos desde el nacimiento, y
-  `learn()` puede mutarlos sin tocar jamás el `Genome` que lo construyó
-  (lo único que `crossover`/`mutate` ven).
-- Cada `forward()` actualiza una **traza de elegibilidad** por peso
-  (correlación pre×post de esa activación, decaída cada tick con
-  `ELIGIBILITY_DECAY = 0.90`).
-- Cuando el agente recoge comida con éxito (`grab`), `Agent.update` llama a
-  `brain.learn(REWARD_GRAB_SUCCESS)` (recompensa 1.0): los pesos que
-  contribuyeron recientemente a esa activación se refuerzan
-  (`w += LEARNING_RATE * reward * elegibilidad`, clampeado igual que los
-  pesos genéticos). El resto de los ticks la recompensa es 0.0 → no-op.
-- **Sin castigo por hambre sostenida**: se probó y se retiró — penalizaba
-  también a agentes que ya iban de camino a la comida pero aún no habían
-  llegado, empujando los pesos en contra del comportamiento que sí estaba
-  funcionando.
-- Lo aprendido vive y muere con el agente: no se hereda. Constantes en
-  `config.py`, sección `# --- Reinforcement learning ---`.
+**El principio: se recompensa el resultado, no el acto.** La recompensa es
+el hambre realmente saciada; la traza de elegibilidad, al durar segundos,
+es la que reparte el crédito hacia atrás hasta el `grab` que hizo posible
+esa comida. Así la cadena "recoger → llevar → comer" se aprende en vez de
+estar cableada, y los exploits se cierran solos: dar vueltas recogiendo y
+soltando comida no sacia nada, luego no paga nada.
+
+### Las tres piezas
+
+1. **Instinto** — `grab`/`interact`/`drop` nacen con pesos pequeños
+   ajustados a mano que las acercan al umbral en el contexto correcto pero
+   nunca lo cruzan solas: `grab` mira `h4` (comida debajo), `interact` mira
+   `hunger` con un peso grande (compuerta de hambre nítida, alineada con el
+   cruce ~0.53 de la fila `eat`) y `h5` (llevo algo), `drop` no tiene
+   instinto ninguno.
+2. **Exploración** — las tres filas tienen peso sobre la entrada `noise`
+   ("balbuceo motor"): la acción se dispara de vez en cuando y por tanto
+   puede ser reforzada. Es autolimitante, porque el peso del ruido es un
+   peso más: lo que sale mal se castiga y baja. No añade ninguna tirada
+   nueva del RNG (`noise` ya se sortea una vez por `_inputs()`), así que el
+   determinismo no se toca.
+3. **Refuerzo** — la escalera de recompensas hace crecer los pesos de señal
+   real hasta que dominan al ruido.
+
+### La escalera de recompensas
+
+Cada peldaño responde a "¿qué necesidad se satisfizo?", nunca a "¿qué
+acción se ejecutó?":
+
+| Peldaño | Cuándo |
+| --- | --- |
+| `REWARD_EAT_K` × hambre saciada | comer, venga del suelo o del inventario |
+| × `REWARD_INVENTORY_MEAL_MULT` | la comida venía del inventario y se llevó al menos `CARRY_BONUS_MIN_S`: eso es previsión |
+| `REWARD_GRAB` (pequeño) | recoger comida *que creció en el mundo*: es una inversión, no un pago |
+| `PENALTY_DROP_HUNGRY` | soltar comida con `hunger > HUNGER_WARNING`: desperdicio |
+| `PENALTY_STARVING_WITH_FOOD` (por segundo) | `hunger > HUNGER_CRITICAL` **llevando comida encima** |
+
+Comer domina por diseño: una comida entera sacia hasta 0.9 de hambre, o sea
+paga ~2.7 (~4.0 desde el inventario) frente a los 0.15 de recoger. Recoger
+nunca puede volverse un fin en sí mismo.
+
+`PENALTY_STARVING_WITH_FOOD` **no** es el castigo por hambre que se retiró
+en su día: exige llevar comida en el inventario. Aquel castigaba también al
+agente que iba de camino a la comida sin haber llegado —empujando los pesos
+en contra del comportamiento que sí funcionaba—, y ese agente tiene el
+inventario vacío, así que nunca lo cobra. Aquí solo se castiga a quien
+lleva la solución encima y no la usa.
+
+Dos agujeros de *reward hacking* cerrados explícitamente, de la misma
+familia que las microsiestas que cerró la curva del sueño:
+
+- **`grab` → `drop` → `grab`.** Soltar deja la comida bajo los pies del que
+  la soltó, o sea inmediatamente re-agarrable. `World.dropped_cells` marca
+  la comida que puso un agente: recogerla no paga nada.
+- **Recoger y soltar en bucle de un frame.** `CARRY_MIN_S`: no puedes
+  soltar lo que acabas de coger, ni cobras el extra de previsión por una
+  comida que no llegaste a llevar. Es el mismo enclavamiento del cuerpo que
+  `REST_WAKE_ENERGY`, y por la misma razón: una salida que ronda su umbral
+  produce parpadeo de un frame en vez de conducta. Medido sin él, la
+  mediana de tiempo en el inventario era de **0.10 s** y los agentes
+  recogían y soltaban comida 50 veces por cada vez que comían. El valor
+  concreto importa: a 1 s hay mucho trasiego, a 3 s baja un 64 % *y* suben
+  las comidas del inventario, y a 6 s la población se hunde porque bloquear
+  tanto tiempo la única ranura impide recoger lo que sí hace falta.
+
+### Qué es plástico y qué es instinto
+
+**La evolución cambia los sentidos; la vida cambia qué haces con ellos.**
+Solo las filas `grab`/`interact`/`drop` (`LEARNABLE_OUTPUTS`) aprenden en
+vida. `move_x`, `move_y`, `eat`, `rest` y **toda la capa oculta** son
+instinto: solo la mutación las toca, entre generaciones.
+
+No es purismo, es una necesidad. Una recompensa escalar única no puede
+decir *qué* fila se la ganó, así que sin esta separación la recompensa por
+comida reescribe circuitos que no tienen nada que ver. Medido antes de
+existir: el aprendizaje le escribió un peso sobre `noise` a la fila `rest`
+—cuyas entradas son por lo demás constantes— y el sueño de un agente empezó
+a parpadear frame a frame justo en su umbral; dejó de dormir de noche con
+el estómago lleno. Los márgenes afinados a mano (el peso ×20 del hambre en
+`eat`, el 8.0 de la noche en `rest`) existen precisamente para sobrevivir a
+la deriva: dejar que una señal hebbiana difusa los erosione destruye justo
+lo que protegen.
+
+### La traza de elegibilidad
+
+`w += LEARNING_RATE * reward * elegibilidad`, clampeado igual que los pesos
+genéticos; `reward == 0.0` (el caso común) es un no-op. La traza tiene tres
+propiedades, cada una arreglando una forma concreta en que esta regla se
+tuerce:
+
+- Es una **media móvil**, no una suma. La suma saturaba en 10× el producto
+  pre×post, y habría saturado en 120× con un tau lo bastante largo para
+  acreditar un `grab` por una comida que llega segundos después.
+- Decae **por segundo** (`ELIGIBILITY_TAU_S`), no por tick. La constante por
+  tick acoplaba en silencio la dinámica del aprendizaje a los FPS y al
+  multiplicador de velocidad.
+- Acredita la **desviación** de cada neurona respecto a su propia línea base
+  (`BASELINE_TAU_S`), no su activación bruta. Ésta es la que más importa:
+  como la activación nunca es negativa, cualquier recompensa reforzaba toda
+  salida activa —y los biases más que nadie, porque su entrada es siempre
+  1—. Medido en la primera calibración: la fila `drop`, a la que ninguna
+  recompensa se refiere, pasó de una tasa de disparo del 0.2 % al 13 % en
+  cuatro minutos simulados solo por esa deriva, los agentes se dedicaron a
+  recoger y soltar comida sin parar, y la población se extinguió. Acreditar
+  la desviación significa que una neurona en su valor de siempre no gana
+  nada, y solo responde la que de verdad hizo algo inusual.
+
+Constantes en `config.py`, sección `# --- Reinforcement learning ---`.
+`tests/learning_test.py` cubre todo lo anterior.
 
 ## El inspector (`sim/inspector.py`)
 
@@ -221,8 +316,17 @@ es redimensionable; `loop.py` reescala la superficie offscreen en
   `DETOUR_S` (sección `# --- Agents ---`).
 - **Afinar el ritmo** → constantes de la sección `# --- Agents ---`.
 - **Afinar el aprendizaje personal** → `LEARNING_RATE`,
-  `ELIGIBILITY_DECAY`, `REWARD_GRAB_SUCCESS` (sección
-  `# --- Reinforcement learning ---`).
+  `ELIGIBILITY_TAU_S`, `BASELINE_TAU_S` y la escalera de recompensas
+  (`REWARD_EAT_K`, `REWARD_INVENTORY_MEAL_MULT`, `REWARD_GRAB`,
+  `PENALTY_*`), sección `# --- Reinforcement learning ---`.
+- **Hacer plástica otra conducta** → añadir su índice de fila a
+  `LEARNABLE_OUTPUTS`. Piénsalo dos veces con las filas afinadas a mano: sus
+  márgenes están calculados para sobrevivir a la mutación, no a un gradiente
+  hebbiano difuso.
+- **Afinar cuánto exploran** → el peso de la columna `noise` (12) en las
+  filas `grab`/`interact`/`drop` de `BRAIN_W_OUT`, y sus biases: juntos
+  fijan la tasa de disparo de cada fila (la aritmética está en el comentario
+  de `config.py`).
 - **Lo inviolable** no se edita: lo garantiza el cuerpo (`sim/agent.py`).
-- **Probar sin abrir la ventana** → `tests/smoke_agents.py` y
-  `tests/evolution_test.py` (headless).
+- **Probar sin abrir la ventana** → `tests/smoke_agents.py`,
+  `tests/evolution_test.py` y `tests/learning_test.py` (headless).
