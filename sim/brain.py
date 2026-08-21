@@ -1,7 +1,7 @@
 """Brain: a small multilayer perceptron, pure Python (no dependencies).
 
-The MLP is the agent's brain: it receives 11 signals and emits 5
-intentions (movement direction, eat, rest, grab). All weights live in
+The MLP is the agent's brain: it receives 11 signals and emits 7
+intentions (movement direction, eat, rest, grab, interact, drop). All weights live in
 sim.config (hand-tuned, readable tables); this module only does the
 forward pass. See config.py `# --- Brain ---` for the meaning of every
 unit and every weight.

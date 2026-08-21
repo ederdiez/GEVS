@@ -81,7 +81,7 @@ COLOR_AGENT_MATING = (214, 94, 194)    # magenta: in the mate cooldown (recently
 COLOR_AGENT_OUTLINE = (30, 32, 40)     # dark outline on every agent
 
 # --- Brain (neural network) ---
-# MLP: 11 inputs -> 6 hidden relu units -> 5 sigmoid outputs. Pure Python,
+# MLP: 11 inputs -> 6 hidden relu units -> 7 sigmoid outputs. Pure Python,
 # weights hand-tuned below so behavior is sensible. The brain proposes
 # intentions; the agent's body (agent.py) enforces what is inviolable.
 #
@@ -127,7 +127,7 @@ BRAIN_W_HIDDEN = [
 ]
 BRAIN_B_HIDDEN = [-2.0, -2.0, 0.70, -0.50, -0.20, -0.50]
 
-# Output layer: 5 outputs (move_x, move_y, eat, rest, grab). One row per output;
+# Output layer: 7 outputs (move_x, move_y, eat, rest, grab, interact, drop). One row per output;
 # columns are the 6 hidden activations followed by the 11 raw inputs
 # (skip connections: the raw inputs also reach the outputs directly).
 #   move_x, move_y:  direction, 2 * output - 1 in [-1, 1]. Food seeking is
@@ -176,6 +176,16 @@ BRAIN_B_HIDDEN = [-2.0, -2.0, 0.70, -0.50, -0.20, -0.50]
 #                    food_close (col 11) or on h4 (food_ahead, col 4); h5
 #                    (carrying, col 5) and has_food (col 16) tell the brain
 #                    the inventory is full, to decide what to do with it.
+#   interact:        use whatever is in the one-slot inventory — for food
+#                    that means eating it (same eat_timer state machine as
+#                    eating off the ground, see agent.py); other future
+#                    carryable items each define their own interact
+#                    behavior, dispatched by item type. Like grab, NOT
+#                    hand-tuned (weights 0, bias -2.0): discovered by
+#                    mutation drift.
+#   drop:            release the inventory onto the ground under the agent
+#                    (only onto an empty cell). Same NOT-hand-tuned pattern
+#                    as grab/interact.
 BRAIN_W_OUT = [
     #      h0  h1  h2  h3  h4  h5 | hunger energy night dir_x dir_y close noise oth_x oth_y oth_close has_food
     [2.4, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  -3.0, 0.0, 0.0, 0.0],  # move_x
@@ -183,6 +193,8 @@ BRAIN_W_OUT = [
     [0.0, 0.0, 0.0, 0.0, 1.0, 0.0,  20.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # eat
     [0.0, 0.0, 8.0, 8.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # rest
     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # grab
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # interact
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # drop
 ]
 # Movement biases: +0.5. The old -0.5 was tuned against a neutral food_dir
 # input (0.5 with no food) that contributed +2.4 * 0.5 = +1.2 to each move
@@ -192,13 +204,16 @@ BRAIN_W_OUT = [
 # i.e. [-1.0, +1.0] — symmetric, slightly livelier than the old
 # [-0.8, +0.8].
 # eat bias: -10.5 pairs with the 20.0 hunger skip (see the eat comment
-# above). grab bias: -2.0, negative on purpose — see the grab row comment.
-BRAIN_B_OUT = [0.5, 0.5, -10.5, -1.0, -2.0]
+# above). grab/interact/drop biases: -2.0, negative on purpose — see the
+# grab row comment.
+BRAIN_B_OUT = [0.5, 0.5, -10.5, -1.0, -2.0, -2.0, -2.0]
 
 # Output thresholds: above these, the body acts on the intention.
 EAT_OUTPUT_THRESHOLD = 0.5
 REST_OUTPUT_THRESHOLD = 0.6
-GRAB_OUTPUT_THRESHOLD = 0.3
+GRAB_OUTPUT_THRESHOLD = 0.4
+INTERACT_OUTPUT_THRESHOLD = 0.4
+DROP_OUTPUT_THRESHOLD = 0.4
 
 # --- Inspector (per-agent neural network debug window) ---
 INSPECTOR_WINDOW_WIDTH = 700

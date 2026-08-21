@@ -28,8 +28,8 @@ Principios del proyecto:
   interpolados, overlay nocturno e HUD con hora (vista top-down, sin cielo:
   la iluminación varía con la hora).
 - ✅ **Agentes: cerebro NN + cuerpo** — comportamiento *completo*
-  (movimiento, comer, descansar, recoger) desde una MLP
-  (11 entradas → 6 ocultas → 5 salidas) afinada a mano en `sim/config.py`,
+  (movimiento, comer, descansar, recoger, interactuar, soltar) desde una MLP
+  (11 entradas → 6 ocultas → 7 salidas) afinada a mano en `sim/config.py`,
   con **genoma propio por individuo**. Hambre + sueño, comida que se agota
   y reaparece, y evitación de choques. Ver [Agentes](agentes.md).
 - ✅ **Genética y reproducción sexual** — genoma = pesos de la red + 6

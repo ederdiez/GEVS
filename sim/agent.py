@@ -15,6 +15,31 @@ from sim import config as cfg
 from sim.genetics import Genome
 
 
+def _interact_resource(agent) -> None:
+    """Eat the carried food: hands off to the same eat_timer state
+    machine used for eating straight off the ground (Agent.update), just
+    without needing to stand on a food cell."""
+    agent.inventory = None
+    agent.eat_timer = cfg.EAT_DURATION_S
+
+
+def _drop_resource(agent) -> None:
+    """Drop the carried food onto the ground, if the cell under the
+    agent is empty."""
+    if agent.world.cell_type(agent.cx, agent.cy) == cfg.CELL_EMPTY:
+        agent.world.place_resource(agent.cx, agent.cy)
+        agent.inventory = None
+
+
+# Inventory item type -> (interact fn, drop fn). Every carryable type
+# (cfg.CELL_*) registers both under this same shape, so the dispatch in
+# Agent.update() never special-cases food: adding a new carryable item
+# only means adding one entry here.
+_INVENTORY_ACTIONS = {
+    cfg.CELL_RESOURCE: (_interact_resource, _drop_resource),
+}
+
+
 class Agent:
     """One individual. Position is in cell units: x, y are floats
     (smooth movement), cx, cy are the integer cell the agent occupies."""
@@ -57,6 +82,8 @@ class Agent:
         self.eat_out = 0.0
         self.rest_out = 0.0
         self.grab_out = 0.0
+        self.interact_out = 0.0
+        self.drop_out = 0.0
         self.state = "active"      # derived: eating / resting / active
         # Carried resource (one slot; None or a cfg.CELL_* int). Set by the
         # grab output; deposit/consume of the inventory is future work, so
@@ -155,7 +182,7 @@ class Agent:
         """Eligible to mate: alive, off cooldown, fed and rested enough.
 
         This drive lives in the body, not the brain: adding mate inputs
-        would break the 11->6->5 topology and the hand-tuned weights
+        would break the 11->6->7 topology and the hand-tuned weights
         (input 9 stays RESERVED, config.py).
         """
         return (self.alive and self._mate_cooldown <= 0.0
@@ -188,7 +215,8 @@ class Agent:
         """Think (brain) and act (body) for dt real seconds."""
         self.age_s += dt
         self._mate_cooldown = max(0.0, self._mate_cooldown - dt)
-        self.move_x, self.move_y, self.eat_out, self.rest_out, self.grab_out = self.brain.forward(self._inputs())
+        (self.move_x, self.move_y, self.eat_out, self.rest_out, self.grab_out,
+         self.interact_out, self.drop_out) = self.brain.forward(self._inputs())
 
         # Survival reflex (below the brain, like biology): starving agents
         # never stop to rest — keep searching for food.
@@ -218,6 +246,17 @@ class Agent:
             self.world.consume_resource(self.cx, self.cy)
             self.inventory = cfg.CELL_RESOURCE
             grabbed = True
+
+        # Inventory actions: interact (use what's carried — dispatched by
+        # item type, see _INVENTORY_ACTIONS) or drop it. Interact is
+        # skipped while already eating, so it can't restart the eat_timer
+        # mid-meal.
+        if self.inventory is not None:
+            interact_fn, drop_fn = _INVENTORY_ACTIONS[self.inventory]
+            if self.interact_out > cfg.INTERACT_OUTPUT_THRESHOLD and self.eat_timer <= 0:
+                interact_fn(self)
+            elif self.drop_out > cfg.DROP_OUTPUT_THRESHOLD:
+                drop_fn(self)
 
         # Eating takes precedence over resting.
         if self.eat_timer > 0:

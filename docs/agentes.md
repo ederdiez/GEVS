@@ -2,17 +2,23 @@
 
 **La red propone, el cuerpo ejecuta.** Todo el comportamiento sale de una
 red neuronal (`sim/brain.py`, MLP en Python puro: 11 entradas → 6 neuronas
-ocultas relu → 5 salidas sigmoid). La red emite *intenciones*; un cuerpo
+ocultas relu → 7 salidas sigmoid). La red emite *intenciones*; un cuerpo
 (`sim/agent.py`) garantiza lo inviolable: no pisar rocas, no ocupar una
 celda ajena, comer solo donde hay comida, no moverse mientras se descansa,
 buscar pareja cuando es el momento. Así la red puede ser torpe y la
 simulación nunca se rompe. Desde la genética, cada agente tiene **su propio
 cerebro**: los pesos vienen de su genoma, no de una tabla compartida.
 
-La salida 5ª (`grab`) no está ajustada a mano: parte con pesos a cero y
-bias −2.0, por lo que el comportamiento de acaparar recursos debe ser
-descubierto por mutación a lo largo de generaciones (puede no surgir
+Las salidas `grab`, `interact` y `drop` no están ajustadas a mano: parten
+con pesos a cero y bias −2.0, por lo que esos comportamientos deben ser
+descubiertos por mutación a lo largo de generaciones (pueden no surgir
 nunca). El cuerpo limita el inventario a un único recurso por agente.
+`interact`/`drop` despachan según el tipo de objeto llevado
+(`Agent._INVENTORY_ACTIONS` en `agent.py`): para comida, `interact` la
+come (mismo `eat_timer` que comer del suelo) y `drop` la deja caer sobre
+una celda vacía. Añadir un objeto llevable nuevo (no comida) es registrar
+su propio par `(interact_fn, drop_fn)` en esa tabla; el cuerpo nunca hace
+casos especiales por tipo.
 
 ## Entradas de la red (11, normalizadas a [0,1])
 
@@ -53,14 +59,16 @@ un tirón que crece con el hambre (0 por debajo de hambre ~0.5, ~0.4 a
 agente nunca dispara la compuerta, así que la persecución nunca empuja
 hacia el lado equivocado.
 
-## Salidas (5, sigmoid → [0,1])
+## Salidas (7, sigmoid → [0,1])
 
 | Salida       | Intención        | El cuerpo hace |
 |--------------|------------------|----------------|
 | `move_x`, `move_y` | dirección deseada (`2v−1 ∈ [−1,1]`) | avanzar a `AGENT_SPEED` celdas/s, con claims por eje; celda bloqueada → sostén pegajoso por eje (sin temblor) + re-sondeo cada `BLOCKED_PROBE_S`, o rodeo de `DETOUR_S` si la celda es una roca o madera (ver Evitación de choques). El mapa no tiene borde: cruzar un extremo envuelve al lado opuesto (mundo toroidal, ver [Mundo](mundo.md)) |
 | `eat`        | comer            | si `eat > EAT_OUTPUT_THRESHOLD` (0.5) y el agente está sobre comida → comer (celda se vacía, regrow) |
 | `rest`       | descansar        | si `rest > REST_OUTPUT_THRESHOLD` (0.6) → no moverse y recuperar energía |
-| `grab`       | recoger          | si `grab > GRAB_OUTPUT_THRESHOLD` (0.3) y hay comida bajo el agente → pasa a su inventario (una ranura); la celda se vacía (mismo timer de regrow que comer) pero la comida se lleva, no se consume. El cuerpo ignora `grab` si el inventario está lleno; depositar/consumir lo llevado es trabajo futuro. |
+| `grab`       | recoger          | si `grab > GRAB_OUTPUT_THRESHOLD` (0.12) y hay comida bajo el agente → pasa a su inventario (una ranura); la celda se vacía (mismo timer de regrow que comer) pero la comida se lleva, no se consume. El cuerpo ignora `grab` si el inventario está lleno. |
+| `interact`   | usar lo llevado  | si `interact > INTERACT_OUTPUT_THRESHOLD` (0.12), hay algo en el inventario y el agente no está ya comiendo → dispatch por tipo de objeto; para comida, arranca el mismo `eat_timer` que comer del suelo y vacía el inventario. |
+| `drop`       | soltar lo llevado | si `drop > DROP_OUTPUT_THRESHOLD` (0.12), hay algo en el inventario y la celda del agente está vacía → dispatch por tipo de objeto; para comida, la deja en el suelo (`world.place_resource`) y vacía el inventario. |
 
 **Reflejo de supervivencia** (por debajo del cerebro, como en la biología):
 si `hunger > HUNGER_CRITICAL` (0.85), el agente ignora `rest` y sigue
@@ -161,13 +169,13 @@ multi-ventana de pygame 2 / SDL2, `loop.py` la crea con
 `create_inspector_window()`) dibuja en vivo, tick a tick:
 
 - barras de `hunger`/`energy`, generación, edad y estado;
-- el grafo completo de la red — 11 entradas, 6 ocultas, 5 salidas,
+- el grafo completo de la red — 11 entradas, 6 ocultas, 7 salidas,
   coloreado por activación (`Brain.forward_debug`, una copia de `forward`
   que también expone la capa oculta sin efectos secundarios: el hot path
   de cada agente sigue llamando solo a `forward`, así que abrir el
   inspector no acelera el aprendizaje del agente inspeccionado);
-- los tres umbrales de salida (`eat`/`rest`/`grab`) junto a su valor
-  crudo.
+- los cinco umbrales de salida (`eat`/`rest`/`grab`/`interact`/`drop`)
+  junto a su valor crudo.
 
 Si el agente seleccionado muere, la selección se limpia sola. La ventana
 es redimensionable; `loop.py` reescala la superficie offscreen en

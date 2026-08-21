@@ -135,6 +135,13 @@ class World:
         self.regrow_timers[(x, y)] = cfg.RESOURCE_REGROW_S
         self.stats_resource_eaten += 1
 
+    def place_resource(self, x: int, y: int) -> None:
+        """Put food at (x, y), e.g. an agent dropping its inventory. The
+        inverse of consume_resource: no regrow timer, it's already there."""
+        self.grid[y][x] = cfg.CELL_RESOURCE
+        self.food_cells.add((x, y))
+        self.regrow_timers.pop((x, y), None)
+
     def try_claim(self, x: int, y: int, agent) -> bool:
         """Try to occupy cell (x, y), wrapped onto the grid. True if the
         cell is walkable and free."""
