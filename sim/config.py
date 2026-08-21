@@ -69,7 +69,7 @@ HUNGER_WARNING = 0.55      # >= this, agent looks hungry (color + eat drive)
 HUNGER_CRITICAL = 0.85     # >= this, survival reflex: keep moving even at night
 EAT_RATE = 0.45            # hunger lost per second while eating
 EAT_DURATION_S = 2.0       # seconds it takes to eat one food cell
-ENERGY_DRAIN_RATE = 0.013  # energy lost per second while awake (full -> sleepy in ~20 s: real mid-day naps)
+ENERGY_DRAIN_RATE = 0.016  # energy lost per second while awake (full -> sleepy in ~20 s: real mid-day naps)
 
 # Energy recovery while resting is NOT a flat rate: it follows a
 # skewed-gaussian bump over *time continuously asleep* (agent._sleep_timer,
@@ -89,11 +89,12 @@ SLEEP_RECOVERY_PEAK_TIME = 7.0      # s asleep at the deep-sleep peak
 SLEEP_RECOVERY_SIGMA_RISE = 1.5     # s; spread of the climb INTO deep sleep (steep)
 SLEEP_RECOVERY_SIGMA_FALL = 10.0    # s; spread of the ease OUT of deep sleep (long tail)
 
-RESOURCE_REGROW_S = 40.0   # seconds until an eaten food cell regrows
+RESOURCE_REGROW_S = 30.0   # seconds until an eaten food cell regrows
 FOOD_SENSE_RANGE = 8.0     # cells; beyond this the brain gets no food direction
 AGENT_SENSE_RANGE = 2.0    # cells; "personal space" — nearest-agent sensors below this
 BLOCKED_PROBE_S = 0.5      # s; while holding a blocked cell, re-probe it this often
 REST_WAKE_ENERGY = 0.60    # resting agents stay down until energy >= this (nap latch)
+MIN_ENERGY_TO_REST = 0.50  # can't fall asleep below this energy (exhausted agents keep moving)
 DETOUR_S = 0.4             # s; slide around a rock/border before resuming (2.4 cells at AGENT_SPEED)
 
 # Agent colors (drawing.py): state -> color

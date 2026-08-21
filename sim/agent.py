@@ -243,9 +243,13 @@ class Agent:
         # energy would park at the crossing instead of rising. Once down,
         # stay down until the brain stops demanding rest with energy back
         # above REST_WAKE_ENERGY — starvation breaks the sleep first.
+        # Falling asleep also needs a minimum energy reserve (MIN_ENERGY_TO_REST):
+        # an already-resting agent never drops below it, since energy only
+        # rises while asleep — so this only gates the start of a nap.
         demands_rest = self.rest_out > cfg.REST_OUTPUT_THRESHOLD
         was_resting = self._resting
-        resting = self._resting or (demands_rest and not starving)
+        can_start_rest = self.energy >= cfg.MIN_ENERGY_TO_REST
+        resting = self._resting or (demands_rest and not starving and can_start_rest)
         if resting and (starving or (not demands_rest and self.energy >= cfg.REST_WAKE_ENERGY)):
             resting = False
         self._resting = resting
