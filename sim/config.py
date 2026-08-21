@@ -201,8 +201,8 @@ REST_OUTPUT_THRESHOLD = 0.6
 GRAB_OUTPUT_THRESHOLD = 0.3
 
 # --- Inspector (per-agent neural network debug window) ---
-INSPECTOR_WINDOW_WIDTH = 380
-INSPECTOR_WINDOW_HEIGHT = 620
+INSPECTOR_WINDOW_WIDTH = 450
+INSPECTOR_WINDOW_HEIGHT = 720
 INSPECTOR_WINDOW_TITLE = "GEVS IA — Inspector"
 INSPECTOR_CLICK_RADIUS = 0.6      # cells; max distance from click to select an agent
 COLOR_INSPECTOR_BG = (18, 20, 28)
@@ -235,7 +235,7 @@ TRAIT_MAX = 2.0               # límite superior
 LEARNING_RATE = 0.02          # tasa del ajuste hebbiano
 ELIGIBILITY_DECAY = 0.90      # decaimiento por tick de la traza de elegibilidad
 REWARD_GRAB_SUCCESS = 1.0     # recompensa al recoger comida con éxito
-PUNISH_HUNGER_SCALE = 0.5     # castigo/tick = -escala * max(0, hunger - HUNGER_WARNING)
+PUNISH_HUNGER_SCALE = 0.1     # castigo/tick = -escala * max(0, hunger - HUNGER_WARNING)
 
 # --- Death and population ---
 MAX_AGE_S = 300.0             # s; death by old age (5 simulated days)
