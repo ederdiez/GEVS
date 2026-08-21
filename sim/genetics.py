@@ -3,10 +3,10 @@
 Pure logic, no pygame. Every random draw takes the world's rng, so a
 fixed seed reproduces the same population and the same evolution.
 
-The Genome owns the weights; the Brain (sim.brain) is a stateless
-forward machine that reads them. crossover()/mutate() are PURE: they
-return a new Genome and never touch self, so sharing table references
-with a parent's Brain is harmless.
+The Genome owns the weights; the Brain (sim.brain) deep-copies them and
+may learn from them in-life (reward-modulated Hebbian RL), so it never
+writes back into the Genome. crossover()/mutate() are PURE: they return
+a new Genome and never touch self.
 
 Traits are multipliers ~1.0 over the base body rates in sim.config
 (speed, food_sense, hunger_rate, energy_drain, eat_rate, rest_rate),
@@ -72,7 +72,9 @@ class Genome:
         self.traits = traits
 
     def build_brain(self) -> Brain:
-        """A Brain that references the same tables (forward only reads)."""
+        """A Brain seeded from these tables. Brain.__init__ deep-copies
+        them, so the Brain can learn (personal, in-life RL) without ever
+        mutating this Genome — the only thing crossover()/mutate() see."""
         return Brain(self.w_hidden, self.b_hidden, self.w_out, self.b_out)
 
     def clone(self) -> "Genome":

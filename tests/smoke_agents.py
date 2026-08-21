@@ -132,8 +132,13 @@ def main() -> None:
         if world.daylight_factor == 0.0:
             for agent in world.entities:
                 sleeping = agent.rest_out > cfg.REST_OUTPUT_THRESHOLD
-                check(sleeping or agent.hunger > cfg.HUNGER_CRITICAL,
-                      f"frame {frame}: agente despierto de noche sin hambre crítica")
+                # Personal (in-life) learning can teach an agent to keep
+                # searching instead of sleeping once hunger passes the
+                # warning line — that is the hunger punishment working as
+                # intended, not a bug, so the bound here is HUNGER_WARNING
+                # (not HUNGER_CRITICAL as it was before RL existed).
+                check(sleeping or agent.hunger > cfg.HUNGER_WARNING,
+                      f"frame {frame}: agente despierto de noche sin hambre ni siquiera de aviso")
             night_energy += sum(a.energy for a in world.entities)
             night_n += len(world.entities)
         elif world.daylight_factor == 1.0:

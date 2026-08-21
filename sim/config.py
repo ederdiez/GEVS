@@ -229,6 +229,15 @@ TRAIT_MUTATION_SIGMA = 0.05   # sigma multiplicativa (log-normal) de rasgos
 TRAIT_MIN = 0.5               # límite inferior del multiplicador de rasgo
 TRAIT_MAX = 2.0               # límite superior
 
+# --- Reinforcement learning (aprendizaje personal, no genético) ---
+# agent.brain empieza como copia exacta de los pesos del genoma y se ajusta
+# en vida con una regla Hebbiana modulada por recompensa (sin backprop). El
+# genoma nunca se toca: lo aprendido no se hereda.
+LEARNING_RATE = 0.02          # tasa del ajuste hebbiano
+ELIGIBILITY_DECAY = 0.90      # decaimiento por tick de la traza de elegibilidad
+REWARD_GRAB_SUCCESS = 1.0     # recompensa al recoger comida con éxito
+PUNISH_HUNGER_SCALE = 0.5     # castigo/tick = -escala * max(0, hunger - HUNGER_WARNING)
+
 # --- Death and population ---
 MAX_AGE_S = 300.0             # s; death by old age (5 simulated days)
 MAX_POPULATION = 60           # safety cap on the living population

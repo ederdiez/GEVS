@@ -211,11 +211,13 @@ class Agent:
         # The body enforces the single slot: while the inventory is full,
         # grab is ignored no matter what the brain demands. Depositing or
         # consuming the carried resource is future work.
+        grabbed = False
         if (self.inventory is None
                 and self.grab_out > cfg.GRAB_OUTPUT_THRESHOLD
                 and self.world.cell_type(self.cx, self.cy) == cfg.CELL_RESOURCE):
             self.world.consume_resource(self.cx, self.cy)
             self.inventory = cfg.CELL_RESOURCE
+            grabbed = True
 
         # Eating takes precedence over resting.
         if self.eat_timer > 0:
@@ -296,6 +298,13 @@ class Agent:
             self.state = "resting"
         else:
             self.state = "active"
+
+        # Personal learning (RL, not genetic): reward grabbing food,
+        # punish sustained hunger. Mutates this agent's own brain only —
+        # self.genome (what reproduction reads) is never touched here.
+        reward = (cfg.REWARD_GRAB_SUCCESS if grabbed else 0.0) \
+            - cfg.PUNISH_HUNGER_SCALE * max(0.0, self.hunger - cfg.HUNGER_WARNING)
+        self.brain.learn(reward)
 
         # Death: starvation (hunger >= 1.0), exhaustion (energy <= 0), or
         # old age. Deferred: world.kill only marks the agent; the removal
