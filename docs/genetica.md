@@ -8,15 +8,19 @@ las tablas afinadas ± ruido pequeño (`INITIAL_WEIGHT_NOISE`,
 `INITIAL_TRAIT_NOISE`).
 
 El genoma es la **única unidad de herencia**: crossover, mutación y clon
-operan solo sobre él. El `Brain` es una máquina de forward sin estado
-hereditario: solo lee las tablas de su genoma, y como `crossover`/`mutate`
-son puros (devuelven un genoma nuevo, nunca tocan al padre), compartir
-referencias es inofensivo.
+operan solo sobre él. `Genome.build_brain()` construye un `Brain` que
+**copia en profundidad** esas tablas: el `Brain` es dueño de pesos propios
+desde el nacimiento, así que el aprendizaje personal en vida (Hebbiano,
+ver [Agentes → Aprendizaje personal](agentes.md)) puede ajustarlos sin
+tocar jamás el genoma. `crossover`/`mutate` siguen siendo puros (devuelven
+un genoma nuevo, nunca tocan al padre) — lo aprendido en vida no se
+hereda, solo el genoma.
 
 ## Herencia (sexual por encuentro)
 
 Dos agentes elegibles (energía ≥ `MATE_ENERGY_THRESHOLD`, hambre ≤
 `MATE_HUNGER_MAX`, fuera de cooldown) a distancia Manhattan ≤ `MATE_RANGE`
+(5 celdas)
 se buscan mutuamente: el reflejo de pareja vive en el **cuerpo** y
 sobreescribe la evitación de la red — el mismo patrón "cuerpo inviolable"
 que el food rush, sin tocar la topología 10→5→5 ni los pesos afinados (la
@@ -45,7 +49,8 @@ que el food rush, sin tocar la topología 10→5→5 ni los pesos afinados (la
 
 ## Muerte
 
-`hunger ≥ 1.0`, `energy ≤ 0.0` o `age ≥ MAX_AGE_S`. `world.kill()` marca la
+`hunger ≥ 1.0`, `energy ≤ 0.0` o `age ≥ MAX_AGE_S` (300 s, 5 días
+simulados). `world.kill()` marca la
 baja y libera la claim al instante; la remoción de `entities` se materializa
 en `world.end_frame()` — nunca se muta la lista en medio del bucle de
 agentes (`loop.py` llama a `end_frame` tras el bucle; los tests hacen lo

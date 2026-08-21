@@ -15,24 +15,27 @@ gevs_ia/
     ├── window.py        # Crea la ventana de pygame.
     ├── world.py         # Lógica pura del mundo: grid + reloj + comida + claims + nacimientos/muertes (sin pygame).
     ├── agent.py         # El agente: cuerpo que ejecuta las intenciones del cerebro.
-    ├── brain.py         # MLP pura en Python: forward de la red (máquina sin estado).
+    ├── brain.py         # MLP pura en Python: forward de la red + aprendizaje Hebbiano personal (learn()).
     ├── genetics.py      # Genoma: pesos del cerebro + rasgos del cuerpo; crossover, mutación, clon.
     ├── drawing.py       # Funciones de dibujo (una función por elemento).
-    └── loop.py          # Bucle principal: eventos → actualizar → dibujar.
+    ├── inspector.py     # Ventana secundaria: red neuronal de un agente en vivo (clic para seleccionar).
+    └── loop.py          # Bucle principal: eventos → actualizar → dibujar (+ ventana del inspector).
 ```
 
 ## Flujo de ejecución
 
 ```
 main.py
-  └─ window.create_window()   →  crea la ventana
-  └─ loop.run(screen)         →  bucle infinito:
-        1. eventos (cerrar ventana...)
+  └─ window.create_window()   →  crea la ventana principal
+  └─ loop.run(screen)         →  crea la ventana del inspector, luego bucle infinito:
+        1. eventos (cerrar ventana, clic → seleccionar agente, resize del inspector...)
         2. world.update(dt)   →  reloj + regrow de comida
-           + cada agente: brain.forward() + cuerpo (movimiento, comer, descansar, aparearse)
+           + cada agente: brain.forward() (+ traza de elegibilidad) + cuerpo
+             (movimiento, comer, descansar, aparearse) + brain.learn(reward)
            + world.end_frame() → materializa las muertes y nacimientos diferidos
-        3. dibujar            ← drawing.py (5 capas, en orden)
-        4. esperar al próximo frame (FPS)
+        3. dibujar            ← drawing.py (5 capas, en orden) en la ventana principal
+        4. inspector.draw_inspector() → red del agente seleccionado, en su propia ventana
+        5. esperar al próximo frame (FPS)
 ```
 
 ## Cómo editar cada cosa
@@ -48,12 +51,14 @@ main.py
 | Evitación: rango del sensor, re-sondeo y rodeo de rocas | `AGENT_SENSE_RANGE` / `BLOCKED_PROBE_S` / `DETOUR_S` en `sim/config.py`. |
 | El comportamiento de los agentes (pesos de la red) | matrices de la sección `# --- Brain ---` en `sim/config.py`. |
 | Genética (ruido inicial, mutación, clamps) | sección `# --- Genetics ---` en `sim/config.py`. |
+| Aprendizaje personal (tasa, decaimiento, recompensa) | sección `# --- Reinforcement learning ---` en `sim/config.py` y `Brain.learn()` en `sim/brain.py`. |
 | Reproducción (umbrales, cooldown, coste, rango) | sección `# --- Reproduction ---` en `sim/config.py`. |
 | Muerte y tope de población | `MAX_AGE_S` / `MAX_POPULATION` en `sim/config.py`. |
 | El genoma (crossover/mutación/clon) | `sim/genetics.py`.                    |
 | Lo que un agente puede/cómo se mueve | `sim/agent.py` (el cuerpo).         |
 | Las señales que la red recibe | `Agent._inputs()` en `sim/agent.py`. |
 | Cómo se dibuja algo      | `sim/drawing.py` (añade una función).   |
+| La ventana del inspector | `sim/inspector.py` (colores en `config.py`, sección `# --- Inspector ---`). |
 | Qué hace el bucle        | `sim/loop.py`.                          |
 | Qué módulos se cargan    | `main.py`.                              |
 

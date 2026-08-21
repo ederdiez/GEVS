@@ -9,7 +9,6 @@ ventana. Contiene dos cosas:
   | Valor | Constante        | Qué es                                    |
   | ----- | ---------------- | ----------------------------------------- |
   | 0     | `CELL_EMPTY`     | suelo vacío                               |
-  | 1     | `CELL_BORDER`    | límites del mundo (solo los bordes, nunca una celda del grid) |
   | 2     | `CELL_RESOURCE`  | comida, verde, caminable                  |
   | 3     | `CELL_ROCK`      | roca, colisionable                        |
   | 4     | `CELL_WOOD`      | madera, colisionable                      |
@@ -19,6 +18,12 @@ ventana. Contiene dos cosas:
   (`WOOD_DENSITY = 0.04`) y comida (`RESOURCE_DENSITY = 0.04`). Mismo seed,
   mismo mundo.
 
+  El grid **no tiene borde**: es un mundo toroidal ("esférico"). Cruzar un
+  extremo envuelve al lado opuesto — `World.wrap(x, y)` hace `x % cols, y
+  % rows`, y todas las consultas de celda/movimiento pasan por ahí
+  (`cell_type`, `is_walkable`, `try_claim`, `release`, el spawn de hijos...).
+  Lo único que detiene a un agente son las rocas y la madera.
+
 - **El reloj simulado** `time_sim`: un día dura `DAY_LENGTH_S = 60` s
   reales. De él se derivan `hour` (0–24 h) y `daylight_factor` (0 = noche,
   1 = día), que manejan el ciclo día/noche.
@@ -27,8 +32,9 @@ ventana. Contiene dos cosas:
 
 | Método / atributo       | Qué hace / devuelve                           |
 | ----------------------- | --------------------------------------------- |
-| `is_walkable(x, y)`     | `True` si la celda está en el mundo y no es roca ni madera (la comida sí es caminable). |
-| `cell_type(x, y)`       | Tipo de celda (fuera de límites = borde del mundo). |
+| `wrap(x, y)`             | Envuelve una coordenada al grid toroidal (`x % cols, y % rows`); sirve tanto para celdas (int) como posiciones (float). |
+| `is_walkable(x, y)`     | `True` si la celda (envuelta) no es roca ni madera (la comida sí es caminable). |
+| `cell_type(x, y)`       | Tipo de celda (envuelta al grid; el mundo no tiene fuera de límites). |
 | `hour`                  | Hora simulada (0.0–24.0).                     |
 | `daylight_factor`       | 0.0 noche → 1.0 día pleno (interpolación lineal). |
 | `day`                   | Número de día simulado.                       |

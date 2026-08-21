@@ -38,6 +38,13 @@ Principios del proyecto:
   agotamiento o vejez (`MAX_AGE_S`). Todo el azar vive en la semilla del
   mundo: misma semilla → misma trayectoria evolutiva. Ver
   [Genética](genetica.md).
+- ✅ **Aprendizaje personal (RL Hebbiano)** — cada agente ajusta su propio
+  cerebro en vida (recompensa al recoger comida), sin tocar el genoma: lo
+  aprendido no se hereda. Ver [Agentes → Aprendizaje personal](agentes.md).
+- ✅ **Mundo toroidal** — el grid no tiene borde; cruzar un extremo
+  envuelve al lado opuesto. Ver [Mundo](mundo.md).
+- ✅ **Inspector de agente** — clic sobre un agente para abrir una segunda
+  ventana con su red neuronal en vivo. Ver [Agentes → El inspector](agentes.md).
 
 ## Hoja de ruta (idea aproximada, sin compromiso)
 
@@ -45,10 +52,12 @@ Principios del proyecto:
    movimiento (MLP con capa oculta, pesos editables en `config.py`).
 2. ✅ **(bases) Evolución por genética** — cada agente tiene su genoma
    (pesos + rasgos del cuerpo), se reproduce sexualmente por encuentro y
-   muere. Pendiente: aprendizaje por gradiente o búsqueda, y selección con
-   fitness explícita si hace falta.
-3. **Memoria e interacción** — comunicación y recuerdos entre agentes.
-4. **Sociedades** — estructuras emergentes visibles en pantalla.
+   muere.
+3. ✅ **(bases) Aprendizaje personal** — RL Hebbiano en vida, sin backprop,
+   separado del genoma (no heredable). Pendiente: selección con fitness
+   explícita si hace falta.
+4. **Memoria e interacción** — comunicación y recuerdos entre agentes.
+5. **Sociedades** — estructuras emergentes visibles en pantalla.
 
 ## Índice
 
@@ -57,6 +66,6 @@ Principios del proyecto:
 | [Guía de inicio](guia_inicio.md) | Instalar, ejecutar, solucionar problemas. |
 | [Arquitectura](arquitectura.md) | Mapa de módulos, flujo, cómo editar y añadir cosas. |
 | [Mundo](mundo.md) | Grid, tipos de celda, reloj y API de `sim/world.py`. |
-| [Agentes](agentes.md) | Cerebro NN, entradas/salidas, ritmos, evitación de choques. |
+| [Agentes](agentes.md) | Cerebro NN, entradas/salidas, ritmos, evitación de choques, aprendizaje personal, inspector. |
 | [Genética](genetica.md) | Genoma, herencia, nacimiento, muerte, determinismo. |
 | [Dibujo](dibujo.md) | Capas de dibujo, colores de agentes y HUD. |

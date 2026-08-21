@@ -18,12 +18,16 @@ python3 -m venv .venv
 .venv/bin/python main.py
 ```
 
-Se abre una ventana de 800×600 con un mundo de celdas (rocas en gris,
-madera en marrón, recursos en verde), un ciclo día/noche de 60 segundos y
-agentes circulares que deambulan de día, comen al encontrar comida y
-duermen de noche (su comportamiento sale de una red neuronal; los colores
-se explican en el `README`). Para salir, cierra la ventana (botón X) o
-pulsa `Ctrl+C` en la terminal.
+Se abren dos ventanas: la principal (800×600) con un mundo de celdas
+(rocas en gris, madera en marrón, recursos en verde), un ciclo día/noche
+de 60 segundos y agentes circulares que deambulan de día, comen al
+encontrar comida y duermen de noche (su comportamiento sale de una red
+neuronal; los colores se explican en el `README`); y una ventana
+**inspector**, vacía hasta que haces clic sobre un agente en la principal
+— entonces muestra su red neuronal en vivo (ver
+[Agentes → El inspector](agentes.md)). El mundo no tiene bordes: un
+agente que cruza un extremo aparece por el lado opuesto. Para salir,
+cierra la ventana principal (botón X) o pulsa `Ctrl+C` en la terminal.
 
 ## Problemas comunes
 
