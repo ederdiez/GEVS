@@ -407,5 +407,6 @@ MATE_ENERGY_COST = 0.25       # energy paid by EACH parent (threshold 0.6 - cost
 CHILD_INITIAL_ENERGY = 0.80   # the child's starting energy
 
 # --- Logging ---
-LOG_DIR = "logs"              # one file per run, one line per tick
+LOG_DIR = "logs"              # one file per run, one line every LOG_INTERVAL_S
+LOG_INTERVAL_S = 1.0          # simulated seconds between log lines
 CHILD_INITIAL_HUNGER = 0.20   # the child's starting hunger

@@ -72,7 +72,7 @@ def run(screen: pygame.Surface) -> None:
             for agent in world.entities:
                 agent.update(dt)
             world.end_frame()
-            tick_log.log(world)
+            tick_log.log(world, dt)
 
         if selected_agent is not None and not selected_agent.alive:
             selected_agent = None
