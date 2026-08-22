@@ -3,8 +3,10 @@
 `World` es **lógica pura**: no importa pygame, así que se puede probar sin
 ventana. Contiene dos cosas:
 
-- **El grid** `grid[y][x]` (filas primero), un tablero de 40×30 celdas de
-  20 px. Cada celda es un entero:
+- **El grid** `grid[y][x]` (filas primero), un tablero de 120×90 celdas de
+  20 px (`GRID_COLS`/`GRID_ROWS`/`CELL_SIZE` en `config.py`) — más grande
+  que la ventana (800×600 px), por eso existe la cámara (ver
+  [Dibujo → La cámara](dibujo.md)). Cada celda es un entero:
 
   | Valor | Constante        | Qué es                                    |
   | ----- | ---------------- | ----------------------------------------- |

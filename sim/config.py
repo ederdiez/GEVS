@@ -19,10 +19,19 @@ FPS = 60
 SPEED_LEVELS = (1, 2, 4, 8, 16)
 
 # --- Grid and world ---
-CELL_SIZE = 20                 # px per cell (invariant: GRID_COLS * CELL_SIZE == WINDOW_WIDTH)
-GRID_COLS = 40                 # invariant: GRID_COLS * CELL_SIZE == WINDOW_WIDTH
-GRID_ROWS = 30                 # invariant: GRID_ROWS * CELL_SIZE == WINDOW_HEIGHT
+# The window is a fixed-size viewport (see Camera below); the grid can be
+# larger than it, and the camera pans/zooms to see the rest.
+CELL_SIZE = 20                 # px per cell at zoom 1.0
+GRID_COLS = 120                # 3x the old 40: a world bigger than one screen
+GRID_ROWS = 90                 # 3x the old 30
 WORLD_SEED = 5
+
+# --- Camera (pan + zoom over the world) ---
+CAMERA_DEFAULT_ZOOM = 1.0
+CAMERA_ZOOM_MIN = 0.3          # fits the whole 120x90 grid in the window
+CAMERA_ZOOM_MAX = 3.0
+CAMERA_ZOOM_STEP = 1.15        # multiplier applied per mouse-wheel notch
+CAMERA_PAN_SPEED = 20.0        # cells/second while a pan key is held (WASD/arrows)
 
 # --- Cell types (ints) ---
 CELL_EMPTY = 0

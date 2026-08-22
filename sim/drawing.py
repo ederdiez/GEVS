@@ -28,14 +28,16 @@ _CELL_COLORS = {
 }
 
 
-def draw_world(screen: pygame.Surface, world) -> None:
-    """Draw all non-empty cells on top of the floor background."""
-    size = cfg.CELL_SIZE
-    for y in range(world.rows):
-        for x in range(world.cols):
+def draw_world(screen: pygame.Surface, world, camera) -> None:
+    """Draw non-empty cells visible in the camera's viewport."""
+    size = camera.cell_px()
+    x0, x1, y0, y1 = camera.visible_cell_range()
+    for y in range(y0, y1):
+        for x in range(x0, x1):
             color = _CELL_COLORS.get(world.grid[y][x])
             if color is not None:
-                pygame.draw.rect(screen, color, (x * size, y * size, size, size))
+                sx, sy = camera.to_screen(x, y)
+                pygame.draw.rect(screen, color, (sx, sy, size + 1, size + 1))
 
 
 _AGENT_STATE_COLORS = {
@@ -45,7 +47,7 @@ _AGENT_STATE_COLORS = {
 }
 
 
-def draw_agents(screen: pygame.Surface, world, selected=None) -> None:
+def draw_agents(screen: pygame.Surface, world, camera, selected=None) -> None:
     """Draw every agent as a circle, colored by state.
 
     active agents turn orange when hungry (hunger >= HUNGER_WARNING);
@@ -57,40 +59,37 @@ def draw_agents(screen: pygame.Surface, world, selected=None) -> None:
 
     `selected`, if given, gets a highlighted ring (inspector selection).
     """
+    r = cfg.AGENT_RADIUS * camera.zoom
     for agent in world.entities:
         # Agent.x is in cell units, always inside [cx, cx + 1): the claimed
         # cell. Cell-center-to-pixel is just x * CELL_SIZE; the old
         # `+ CELL_SIZE // 2` shifted every agent one cell down-right.
-        px = int(agent.x * cfg.CELL_SIZE)
-        py = int(agent.y * cfg.CELL_SIZE)
-        pygame.draw.circle(screen, cfg.COLOR_AGENT_OUTLINE,
-                           (px, py), cfg.AGENT_RADIUS + 2)
+        px, py = camera.to_screen(agent.x, agent.y)
+        pygame.draw.circle(screen, cfg.COLOR_AGENT_OUTLINE, (px, py), r + 2)
         if agent._mate_cooldown > 0.0:
             color = cfg.COLOR_AGENT_MATING
         elif agent.state == "active" and agent.hunger >= cfg.HUNGER_WARNING:
             color = cfg.COLOR_AGENT_HUNGRY
         else:
             color = _AGENT_STATE_COLORS[agent.state]
-        pygame.draw.circle(screen, color, (px, py), cfg.AGENT_RADIUS)
+        pygame.draw.circle(screen, color, (px, py), r)
         # Carried resource: small dot above the head (cell colors map each
         # resource type to its color, so wood/rock would show up too later).
         if agent.inventory is not None:
-            dot = (px, py - cfg.AGENT_RADIUS - 5)
+            dot = (px, py - r - 5)
             pygame.draw.circle(screen, cfg.COLOR_AGENT_OUTLINE, dot, 4)
             pygame.draw.circle(screen, _CELL_COLORS.get(agent.inventory,
                                                         cfg.COLOR_CELL_RESOURCE), dot, 3)
         if agent is selected:
-            pygame.draw.circle(screen, cfg.COLOR_SELECTED_OUTLINE,
-                               (px, py), cfg.AGENT_RADIUS + 4, 2)
+            pygame.draw.circle(screen, cfg.COLOR_SELECTED_OUTLINE, (px, py), r + 4, 2)
 
 
-def draw_animals(screen: pygame.Surface, world) -> None:
+def draw_animals(screen: pygame.Surface, world, camera) -> None:
     """Draw every animal as a square — distinct at a glance from the
     agents' circles."""
-    r = cfg.ANIMAL_RADIUS
+    r = cfg.ANIMAL_RADIUS * camera.zoom
     for animal in world.animals:
-        px = int(animal.x * cfg.CELL_SIZE)
-        py = int(animal.y * cfg.CELL_SIZE)
+        px, py = camera.to_screen(animal.x, animal.y)
         rect = pygame.Rect(px - r, py - r, r * 2, r * 2)
         pygame.draw.rect(screen, cfg.COLOR_AGENT_OUTLINE, rect.inflate(4, 4))
         pygame.draw.rect(screen, cfg.COLOR_ANIMAL, rect)

@@ -3,6 +3,7 @@
 import pygame
 
 from sim import config
+from sim.camera import Camera
 from sim.drawing import (
     draw_agents,
     draw_animals,
@@ -15,10 +16,17 @@ from sim.inspector import create_inspector_window, draw_inspector
 from sim.tick_log import TickLogger
 from sim.world import World
 
+_PAN_KEYS = {
+    pygame.K_w: (0, -1), pygame.K_UP: (0, -1),
+    pygame.K_s: (0, 1), pygame.K_DOWN: (0, 1),
+    pygame.K_a: (-1, 0), pygame.K_LEFT: (-1, 0),
+    pygame.K_d: (1, 0), pygame.K_RIGHT: (1, 0),
+}
 
-def _pick_agent(world, px: int, py: int):
-    """Nearest living agent to pixel (px, py), within click radius; or None."""
-    wx, wy = px / config.CELL_SIZE, py / config.CELL_SIZE
+
+def _pick_agent(world, camera, px: int, py: int):
+    """Nearest living agent to screen pixel (px, py), within click radius; or None."""
+    wx, wy = camera.to_world(px, py)
     best, best_dist = None, config.INSPECTOR_CLICK_RADIUS
     for agent in world.entities:
         dist = ((agent.x - wx) ** 2 + (agent.y - wy) ** 2) ** 0.5
@@ -31,6 +39,7 @@ def run(screen: pygame.Surface) -> None:
     """Run the loop until the user closes the window."""
     clock = pygame.time.Clock()
     world = World()
+    camera = Camera()
     tick_log = TickLogger()
     running = True
     selected_agent = None
@@ -50,7 +59,11 @@ def run(screen: pygame.Surface) -> None:
                     and getattr(event, "window", None) is None):
                 # Left click in the main window only (inspector has no
                 # clickable content; `window` is None for the primary display).
-                selected_agent = _pick_agent(world, *event.pos)
+                selected_agent = _pick_agent(world, camera, *event.pos)
+            elif (event.type == pygame.MOUSEWHEEL
+                    and getattr(event, "window", None) is None):
+                factor = config.CAMERA_ZOOM_STEP if event.y > 0 else 1 / config.CAMERA_ZOOM_STEP
+                camera.zoom_at(factor, *pygame.mouse.get_pos())
             elif event.type in (pygame.WINDOWRESIZED, pygame.WINDOWSIZECHANGED):
                 event_window = getattr(event, "window", None)
                 if event_window is inspector.window or getattr(
@@ -61,6 +74,14 @@ def run(screen: pygame.Surface) -> None:
                     speed_index = min(speed_index + 1, len(config.SPEED_LEVELS) - 1)
                 elif event.key in (pygame.K_MINUS, pygame.K_KP_MINUS):
                     speed_index = max(speed_index - 1, 0)
+
+        # Camera pan: continuous while a WASD/arrow key is held.
+        keys = pygame.key.get_pressed()
+        pan_x = sum(dx for key, (dx, _) in _PAN_KEYS.items() if keys[key])
+        pan_y = sum(dy for key, (_, dy) in _PAN_KEYS.items() if keys[key])
+        if pan_x or pan_y:
+            camera.pan(pan_x * config.CAMERA_PAN_SPEED * dt,
+                       pan_y * config.CAMERA_PAN_SPEED * dt)
 
         # 2. Update the world (clock, food regrowth), then each agent
         #    (brain + body), `speed` times per rendered frame so
@@ -86,9 +107,9 @@ def run(screen: pygame.Surface) -> None:
         #    Agents sit between the world and the night overlay: at night the
         #    overlay dims them along with everything else (they are asleep).
         draw_background(screen, world)
-        draw_world(screen, world)
-        draw_agents(screen, world, selected=selected_agent)
-        draw_animals(screen, world)
+        draw_world(screen, world, camera)
+        draw_agents(screen, world, camera, selected=selected_agent)
+        draw_animals(screen, world, camera)
         draw_night_overlay(screen, world)
         draw_hud(screen, world, speed=speed)
         pygame.display.flip()

@@ -17,6 +17,7 @@ gevs_ia/
     ├── animal.py        # Depredadores: entidad scripted, sin red ni genoma propios.
     ├── brain.py         # MLP pura en Python: forward de la red + aprendizaje Hebbiano personal (learn()).
     ├── genetics.py      # Genoma: pesos del cerebro + rasgos del cuerpo; crossover, mutación, clon.
+    ├── camera.py        # Cámara: pan + zoom del mundo (más grande que la ventana) a píxel de pantalla.
     ├── drawing.py       # Funciones de dibujo (una función por elemento).
     ├── inspector.py     # Ventana secundaria: red neuronal de un agente en vivo (clic para seleccionar).
     └── loop.py          # Bucle principal: eventos → actualizar → dibujar (+ ventana del inspector).
@@ -28,7 +29,8 @@ gevs_ia/
 main.py
   └─ window.create_window()   →  crea la ventana principal
   └─ loop.run(screen)         →  crea la ventana del inspector, luego bucle infinito:
-        1. eventos (cerrar ventana, clic → seleccionar agente, resize del
+        1. eventos (cerrar ventana, clic → seleccionar agente, rueda del
+           ratón → zoom de cámara, WASD/flechas → pan, resize del
            inspector, +/- → cambia el multiplicador de velocidad...)
         2. world.update(dt)   →  reloj + regrow de comida + respawn de animales
            + cada animal: animal.update(dt) (deambular/perseguir/atacar, scripted)
@@ -60,6 +62,7 @@ mismo `world.rng`). El HUD muestra "Velocidad: x{n}" cuando no es x1.
 | Quiero cambiar...        | Dónde                                   |
 | ------------------------ | --------------------------------------- |
 | Tamaño de ventana, FPS, colores | `sim/config.py` (solo constantes). |
+| Tamaño del mundo (celdas), zoom/pan de cámara | `GRID_COLS`/`GRID_ROWS` y sección `# --- Camera ---` en `sim/config.py`; lógica en `sim/camera.py`. |
 | Título de la ventana     | `WINDOW_TITLE` en `sim/config.py`.      |
 | Densidad de rocas/madera/comida | `ROCK_DENSITY` / `WOOD_DENSITY` / `RESOURCE_DENSITY` en `sim/config.py`. |
 | Duración del día         | `DAY_LENGTH_S` en `sim/config.py`.      |
@@ -109,4 +112,4 @@ para añadir cualquier cosa nueva:
 | [Mundo](mundo.md) | Grid, tipos de celda, reloj y API de `sim/world.py`. |
 | [Agentes](agentes.md) | Cerebro NN, entradas/salidas, ritmos, evitación de choques. |
 | [Genética](genetica.md) | Genoma, herencia, nacimiento, muerte, determinismo. |
-| [Dibujo](dibujo.md) | Capas de dibujo, colores de agentes y HUD. |
+| [Dibujo](dibujo.md) | Capas de dibujo, colores de agentes y HUD, cámara (pan/zoom). |

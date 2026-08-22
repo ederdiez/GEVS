@@ -36,6 +36,31 @@ Una función por elemento, y el bucle las llama en este orden (importa):
 > estas 5 capas — `sim/inspector.py` la dibuja aparte (ver
 > [Agentes → El inspector](agentes.md)).
 
+## La cámara (`sim/camera.py`)
+
+El grid (120×90 celdas) es más grande que la ventana (800×600 px), así
+que `Camera` (lógica pura, sin pygame) traduce coordenadas de celda a
+píxel de pantalla con un desplazamiento (`x`, `y`, en píxeles de mundo) y
+un zoom: `screen = (celda * CELL_SIZE - offset) * zoom`. Cada función de
+dibujo que coloca algo en el mundo (`draw_world`, `draw_agents`,
+`draw_animals`) recibe la cámara y la usa para convertir; `draw_world`
+además solo recorre `camera.visible_cell_range()` en vez del grid entero,
+así que el coste de dibujar no crece con el tamaño del mundo. El HUD y el
+overlay nocturno son en espacio de pantalla, no la usan.
+
+Controles (`sim/loop.py`):
+
+- **Rueda del ratón** — zoom, centrado en el cursor (`CAMERA_ZOOM_MIN/MAX/STEP`
+  en `config.py`).
+- **WASD / flechas** — pan continuo mientras se mantiene pulsada
+  (`CAMERA_PAN_SPEED`).
+
+`Camera._clamp()` evita que la vista se salga del grid; si el zoom es lo
+bastante bajo para que la ventana entera del mundo quepa en pantalla, se
+centra en vez de pegarse a un borde. La selección de agente por clic
+(`loop._pick_agent`) convierte el píxel de clic a coordenadas de celda
+con `camera.to_world` antes de buscar el agente más cercano.
+
 > **Nota técnica:** el HUD se dibuja con `pygame._freetype` en lugar de
 > `pygame.font`. El wheel de pygame 2.6.1 para Python 3.14 no incluye la
 > extensión C de `font` (ni `imageext` ni `mixer`), y su fallback en Python
