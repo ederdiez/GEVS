@@ -125,7 +125,7 @@ COLOR_AGENT_MATING = (214, 94, 194)    # magenta: in the mate cooldown (recently
 COLOR_AGENT_OUTLINE = (30, 32, 40)     # dark outline on every agent
 
 # --- Brain (neural network) ---
-# MLP: 17 inputs -> 6 hidden relu units -> 8 sigmoid outputs. Pure Python,
+# MLP: 17 inputs -> 8 hidden relu units -> 8 sigmoid outputs. Pure Python,
 # weights hand-tuned below so behavior is sensible. The brain proposes
 # intentions; the agent's body (agent.py) enforces what is inviolable.
 #
@@ -152,12 +152,13 @@ COLOR_AGENT_OUTLINE = (30, 32, 40)     # dark outline on every agent
 #                    learn is what to DO about it, not compute it — see
 #                    LEARNABLE_CELLS below)
 
-# Hidden layer: 6 readable detectors (relu). One row per unit; columns are
-# inputs 0-6 and 10 (needs, night, food direction, food_close, noise,
-# has_food); pos_x/pos_y (11, 12) and the animal inputs (13-16) are wired
-# at zero — no detector reads position or animals yet. The output layer
-# sees all 17 inputs via skip connections (see below). Each unit is a
-# condition detector:
+# Hidden layer: 8 units, relu. One row per unit; columns are inputs
+# 0-6 and 10 (needs, night, food direction, food_close, noise, has_food);
+# pos_x/pos_y (11, 12) and the animal inputs (13-16) are wired at zero —
+# no detector reads position or animals yet. The output layer sees all 17
+# inputs via skip connections (see below). The first 6 units are readable
+# hand-tuned condition detectors, pure instinct (mutation only, never
+# touched by learn() — see LEARNABLE_HIDDEN below):
 #   h0 food_x     = relu(2*hunger + food_dir_x - 2)  hunger-gated food on X
 #   h1 food_y     = relu(2*hunger + food_dir_y - 2)  hunger-gated food on Y
 #   h2 sleepy     = relu(0.70 - energy)   energy below 0.70
@@ -172,6 +173,14 @@ COLOR_AGENT_OUTLINE = (30, 32, 40)     # dark outline on every agent
 # hunger: 0 below hunger ~0.5, ~0.4 at 0.7, 1.0 at hunger 1.0 with food
 # directly ahead. Food behind (food_dir < 2 - 2*hunger) never fires, so
 # pursuit never pushes the wrong way.
+#
+# h6/h7 are the last two rows: no hand-tuned meaning, all weights start
+# at 0 (neutral — they contribute nothing at birth). Mutation can shape
+# their incoming weights across generations like any other cell, and
+# unlike h0-h5 they are also plastic in life on BOTH sides (see
+# LEARNABLE_HIDDEN for the input->hidden side, LEARNABLE_CELLS for the
+# hidden->output side) — blank capacity the agent itself can learn to
+# use, instead of only evolution.
 BRAIN_W_HIDDEN = [
     [2.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h0
     [2.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h1
@@ -179,11 +188,13 @@ BRAIN_W_HIDDEN = [
     [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h3
     [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h4
     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h5
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h6 (neutral, plastic in life)
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h7 (neutral, plastic in life)
 ]
-BRAIN_B_HIDDEN = [-2.0, -2.0, 0.70, -0.50, -0.20, -0.50]
+BRAIN_B_HIDDEN = [-2.0, -2.0, 0.70, -0.50, -0.20, -0.50, 0.0, 0.0]
 
 # Output layer: 8 outputs (move_x, move_y, eat, rest, grab, interact, drop,
-# attack). One row per output; columns are the 6 hidden activations
+# attack). One row per output; columns are the 8 hidden activations
 # followed by the 17 raw inputs (skip connections: the raw inputs also
 # reach the outputs directly).
 #   move_x, move_y:  direction, 2 * output - 1 in [-1, 1]. Food seeking is
@@ -195,7 +206,7 @@ BRAIN_B_HIDDEN = [-2.0, -2.0, 0.70, -0.50, -0.20, -0.50]
 #                    negative weight (-3.0) on the other_dir sensor pushes
 #                    away from the nearest agent — it only engages when
 #                    someone is within AGENT_SENSE_RANGE. The animal_dir_x/y
-#                    columns (19, 20) start at 0 and are NOT hand-tuned:
+#                    columns (21, 22) start at 0 and are NOT hand-tuned:
 #                    they are in LEARNABLE_CELLS, so whether/how strongly to
 #                    move toward or away from a nearby animal is learned in
 #                    life from PENALTY_ANIMAL_DAMAGE_K, not wired by hand.
@@ -280,7 +291,7 @@ BRAIN_B_HIDDEN = [-2.0, -2.0, 0.70, -0.50, -0.20, -0.50]
 #                    drop, it stays pure exploration at a deliberately low
 #                    rate (bias -3.40, noise weight 3.0 -> ~0.05% per tick)
 #                    so the row has occasions to fire and learn from. The 4
-#                    animal columns (19-22: dir_x, dir_y, close, danger) all
+#                    animal columns (21-24: dir_x, dir_y, close, danger) all
 #                    start at 0 and are in LEARNABLE_CELLS — whether being
 #                    near a dangerous animal should trigger an attack is
 #                    learned entirely from PENALTY_ANIMAL_DAMAGE_K, with no
@@ -294,15 +305,15 @@ BRAIN_B_HIDDEN = [-2.0, -2.0, 0.70, -0.50, -0.20, -0.50]
 #                    pushes this row further down; dropping while satiated is
 #                    neutral, leaving room for caching to be discovered.
 BRAIN_W_OUT = [
-    #      h0  h1  h2  h3  h4  h5 | hunger energy night dir_x dir_y close noise oth_x oth_y oth_close has_food pos_x pos_y  a_dir_x a_dir_y a_close a_danger
-    [2.4, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  -3.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # move_x
-    [0.0, 2.4, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  0.0, -3.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # move_y
-    [0.0, 0.0, 0.0, 0.0, 1.0, 0.0,  20.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # eat
-    [0.0, 0.0, 8.0, 8.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # rest
-    [0.0, 0.0, 0.0, 0.0, 1.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # grab
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.5,  6.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # interact
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # drop
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # attack
+    #      h0  h1  h2  h3  h4  h5  h6  h7 | hunger energy night dir_x dir_y close noise oth_x oth_y oth_close has_food pos_x pos_y  a_dir_x a_dir_y a_close a_danger
+    [2.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  -3.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # move_x
+    [0.0, 2.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  0.0, -3.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # move_y
+    [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,  20.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # eat
+    [0.0, 0.0, 8.0, 8.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # rest
+    [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # grab
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0,  6.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # interact
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # drop
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # attack
 ]
 # Movement biases: +0.5. The old -0.5 was tuned against a neutral food_dir
 # input (0.5 with no food) that contributed +2.4 * 0.5 = +1.2 to each move
@@ -368,29 +379,41 @@ TRAIT_MAX = 2.0               # límite superior
 # soltando comida no sacia nada, luego no paga nada.
 LEARNING_RATE = 0.075          # tasa del ajuste hebbiano (~7x el 0.02 de antes: ver la nota de escala abajo)
 # Qué filas de salida son plásticas en vida: grab, interact, drop. Las
-# demás (move_x, move_y, eat, rest) y toda la capa oculta son INSTINTO —
-# solo la evolución las toca. Una recompensa escalar única no puede decir
-# qué fila se la ganó, así que sin esta separación la recompensa por comida
-# reescribe circuitos que no tienen nada que ver: medido antes de existir,
-# el aprendizaje le escribió un peso de `noise` a la fila `rest` —cuyas
-# entradas son constantes— y el sueño de un agente empezó a parpadear frame
-# a frame justo en su umbral, dejando de dormir de noche con el estómago
-# lleno. Los márgenes afinados a mano (el peso 20x del hambre en `eat`, el
-# 8.0 de la noche en `rest`) existen precisamente para sobrevivir a la
-# deriva; dejar que una señal hebbiana difusa los erosione destruye justo
-# lo que protegen.
+# demás (move_x, move_y, eat, rest) y las 6 primeras neuronas ocultas
+# (h0-h5) son INSTINTO — solo la evolución las toca. Una recompensa
+# escalar única no puede decir qué fila se la ganó, así que sin esta
+# separación la recompensa por comida reescribe circuitos que no tienen
+# nada que ver: medido antes de existir, el aprendizaje le escribió un
+# peso de `noise` a la fila `rest` —cuyas entradas son constantes— y el
+# sueño de un agente empezó a parpadear frame a frame justo en su umbral,
+# dejando de dormir de noche con el estómago lleno. Los márgenes afinados
+# a mano (el peso 20x del hambre en `eat`, el 8.0 de la noche en `rest`)
+# existen precisamente para sobrevivir a la deriva; dejar que una señal
+# hebbiana difusa los erosione destruye justo lo que protegen.
 LEARNABLE_OUTPUTS = (4, 5, 6)  # índices de fila en BRAIN_W_OUT
 # Extensión de grano fino: celdas (fila, columna) individuales que también
 # son plásticas en vida, ADEMÁS de las filas completas de arriba. Las usan
-# move_x/move_y/attack para las 4 señales de animal (columna_skip = 6
+# move_x/move_y/attack para las 4 señales de animal (columna_skip = 8
 # unidades ocultas + índice_input; animal_dir_x/y/close/danger son los
-# inputs 13-16 -> columnas 19-22): esas filas siguen siendo instinto para
+# inputs 13-16 -> columnas 21-24): esas filas siguen siendo instinto para
 # todo lo demás (comida, otros agentes), pero nada se afina a mano para
 # los animales — se aprende por completo de PENALTY_ANIMAL_DAMAGE_K.
-_ANIMAL_SKIP_COLS = (19, 20, 21, 22)  # animal_dir_x, animal_dir_y, animal_close, animal_danger
+_ANIMAL_SKIP_COLS = (21, 22, 23, 24)  # animal_dir_x, animal_dir_y, animal_close, animal_danger
+# Las columnas de salida de h6/h7 (las 2 neuronas ocultas plásticas, ver
+# LEARNABLE_HIDDEN) también son plásticas en vida para TODAS las filas de
+# salida: 4/5/6 ya lo son por fila completa (arriba), así que solo hace
+# falta añadir las demás (move_x, move_y, eat, rest, attack).
+_NEW_HIDDEN_OUT_COLS = (6, 7)
 LEARNABLE_CELLS = tuple(
     (row, col) for row in (0, 1, 7) for col in _ANIMAL_SKIP_COLS
-)  # move_x, move_y, attack
+) + tuple(
+    (row, col) for row in range(len(BRAIN_W_OUT)) if row not in LEARNABLE_OUTPUTS
+    for col in _NEW_HIDDEN_OUT_COLS
+)  # move_x, move_y, attack (animal cols) + todas las filas no-LEARNABLE_OUTPUTS (h6/h7 cols)
+# Neuronas ocultas plásticas en vida: sus pesos ENTRANTES (input->hidden)
+# también aprenden con el mismo mecanismo hebbiano que la capa de salida
+# (ver Brain._elig_w_hidden). h0-h5 son instinto puro, nunca tocadas aquí.
+LEARNABLE_HIDDEN = (6, 7)  # índices de fila en BRAIN_W_HIDDEN
 ELIGIBILITY_TAU_S = 2.5       # s; constante de tiempo de la traza de elegibilidad
 BASELINE_TAU_S = 10.0         # s; constante de tiempo de "lo que esta neurona suele hacer"
 # La traza acredita la DESVIACIÓN de cada neurona respecto a su línea base,

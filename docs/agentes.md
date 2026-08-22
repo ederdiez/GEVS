@@ -1,7 +1,7 @@
 # Los agentes: cerebro NN + cuerpo
 
 **La red propone, el cuerpo ejecuta.** Todo el comportamiento sale de una
-red neuronal (`sim/brain.py`, MLP en Python puro: 17 entradas → 6 neuronas
+red neuronal (`sim/brain.py`, MLP en Python puro: 17 entradas → 8 neuronas
 ocultas relu → 8 salidas sigmoid). La red emite *intenciones*; un cuerpo
 (`sim/agent.py`) garantiza lo inviolable: no pisar rocas, no ocupar una
 celda ajena, comer solo donde hay comida, no moverse mientras se descansa,
@@ -49,10 +49,10 @@ Calculadas cada frame en `Agent._inputs()`:
 | 15 | `animal_close` | `1 - min(dist / ANIMAL_SENSE_RANGE, 1)`; 0 si no hay animal en rango |
 | 16 | `animal_danger` | 1.0 si el animal detectado es depredador, 0.0 si no o si no hay ninguno — verdad fundamental que da el mundo, no una inferencia del agente |
 
-## Capa oculta (6 detectores legibles, relu)
+## Capa oculta (8 neuronas relu: 6 detectores legibles + 2 plásticas)
 
-Cada neurona detecta una condición y su significado está documentado en
-`config.py`:
+Cada una de las 6 primeras neuronas detecta una condición y su
+significado está documentado en `config.py`:
 
 - `h0 food_x` = relu(2·hunger + food_dir_x − 2)
 - `h1 food_y` = relu(2·hunger + food_dir_y − 2)
@@ -69,6 +69,13 @@ un tirón que crece con el hambre (0 por debajo de hambre ~0.5, ~0.4 a
 0.7, 1.0 con hambre al máximo y comida justo delante). Comida detrás del
 agente nunca dispara la compuerta, así que la persecución nunca empuja
 hacia el lado equivocado.
+
+`h6`/`h7` son **neuronas en blanco, sin significado hand-tuned**: todos
+sus pesos entrantes y su bias nacen a 0 (`BRAIN_W_HIDDEN`/`BRAIN_B_HIDDEN`
+en `config.py`), así que al nacer no aportan nada. Son el único par de
+neuronas ocultas plástico en vida (ver `LEARNABLE_HIDDEN` más abajo), y
+además de la mutación normal entre generaciones, es capacidad libre que
+cada agente puede aprender a usar durante su propia vida.
 
 ## Salidas (8, sigmoid → [0,1])
 
@@ -254,8 +261,9 @@ familia que las microsiestas que cerró la curva del sueño:
 
 **La evolución cambia los sentidos; la vida cambia qué haces con ellos.**
 Solo las filas `grab`/`interact`/`drop` (`LEARNABLE_OUTPUTS`) aprenden en
-vida. `move_x`, `move_y`, `eat`, `rest` y **toda la capa oculta** son
-instinto: solo la mutación las toca, entre generaciones.
+vida en la capa de salida. `move_x`, `move_y`, `eat`, `rest` y las 6
+primeras neuronas ocultas (`h0`-`h5`) son instinto: solo la mutación las
+toca, entre generaciones.
 
 No es purismo, es una necesidad. Una recompensa escalar única no puede
 decir *qué* fila se la ganó, así que sin esta separación la recompensa por
@@ -274,8 +282,24 @@ siguen siendo instinto para todo lo demás (comida, otros agentes), pero
 sus 4 columnas de animal (`animal_dir_x/y`, `animal_close`,
 `animal_danger`) sí aprenden en vida — nada de esas 12 celdas se afina a
 mano, arrancan en 0 y las moldea `PENALTY_ANIMAL_DAMAGE_K` (ver
-[Depredadores](#depredadores)). `Brain.learn()` aplica esta selección en
-un segundo bucle, independiente de `LEARNABLE_OUTPUTS`.
+[Depredadores](#depredadores)). El mismo mecanismo también cubre las
+columnas de `h6`/`h7` en `w_out`, para las 8 filas de salida (las 3 que
+ya son plásticas por fila completa lo heredan gratis; las otras 5 se
+añaden aquí) — así lo que `h6`/`h7` aprenden a detectar puede
+propagarse a cualquier salida, no solo a `grab`/`interact`/`drop`.
+`Brain.learn()` aplica esta selección en un segundo bucle, independiente
+de `LEARNABLE_OUTPUTS`.
+
+**`LEARNABLE_HIDDEN = (6, 7)`** es la plasticidad simétrica del lado de
+entrada: los pesos entrantes (input→hidden) de `h6`/`h7` también
+aprenden en vida, con la misma regla hebbiana modulada por recompensa
+que la capa de salida (`Brain._elig_w_hidden`/`_elig_b_hidden`, misma
+`LEARNING_RATE`/`ELIGIBILITY_TAU_S`/`BASELINE_TAU_S`). `h0`-`h5` nunca
+pasan por este bucle. Como `h6`/`h7` nacen con peso y bias en 0 (relu
+muerta: activación constante 0, sin desviación de su propia línea base
+que acreditar), no aprenden nada en vida hasta que una mutación les da
+algún peso de entrada — a partir de ahí, la plasticidad en vida puede
+seguir moldeándolas.
 
 ### La traza de elegibilidad
 
@@ -341,11 +365,11 @@ multi-ventana de pygame 2 / SDL2, `loop.py` la crea con
 `create_inspector_window()`) dibuja en vivo, tick a tick:
 
 - barras de `hunger`/`energy`/`hp`, generación, edad y estado;
-- el grafo completo de la red — 17 entradas, 6 ocultas, 8 salidas,
-  coloreado por activación (`Brain.forward_debug`, una copia de `forward`
-  que también expone la capa oculta sin efectos secundarios: el hot path
-  de cada agente sigue llamando solo a `forward`, así que abrir el
-  inspector no acelera el aprendizaje del agente inspeccionado);
+- el grafo completo de la red — 17 entradas, 8 ocultas, 8 salidas,
+  coloreado por activación: el inspector lee `Brain._last_hidden`/
+  `_last_outputs`, que `forward()` ya guarda cada tick, en vez de volver
+  a calcular nada — así abrir el inspector no acelera el aprendizaje
+  (ni la traza de elegibilidad) del agente inspeccionado;
 - los seis umbrales de salida (`eat`/`rest`/`grab`/`interact`/`drop`/`attack`)
   junto a su valor crudo.
 
