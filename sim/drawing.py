@@ -25,6 +25,7 @@ _CELL_COLORS = {
     cfg.CELL_RESOURCE: cfg.COLOR_CELL_RESOURCE,
     cfg.CELL_ROCK: cfg.COLOR_CELL_ROCK,
     cfg.CELL_WOOD: cfg.COLOR_CELL_WOOD,
+    cfg.CELL_SPEAR: cfg.COLOR_CELL_SPEAR,
 }
 
 
@@ -55,7 +56,9 @@ def draw_agents(screen: pygame.Surface, world, camera, selected=None) -> None:
     magenta over any other state — watch the reproduction live.
     An agent carrying a resource in its one-slot inventory (inventory
     is not None) shows a small dot above the head in the resource's
-    cell color — food for now (green).
+    cell color (food green, wood brown); an agent mid-way through
+    crafting a spear also shows a row of progress pips, and an agent
+    with a finished spear shows a stick beside it instead of a dot.
 
     `selected`, if given, gets a highlighted ring (inspector selection).
     """
@@ -77,9 +80,21 @@ def draw_agents(screen: pygame.Surface, world, camera, selected=None) -> None:
         else:
             color = _AGENT_STATE_COLORS[agent.state]
         pygame.draw.circle(screen, color, (px, py), r)
-        # Carried resource: small dot above the head (cell colors map each
-        # resource type to its color, so wood/rock would show up too later).
-        if agent.inventory is not None:
+        # Carried resource: small dot above the head, colored by cell type.
+        # A finished spear gets its own stick icon instead; wood mid-craft
+        # gets a row of progress pips above the dot.
+        if agent.inventory == cfg.CELL_SPEAR:
+            sx = px + r + 6
+            pygame.draw.line(screen, cfg.COLOR_CELL_SPEAR,
+                              (sx, py - r - 2), (sx, py + r + 2), 3)
+        elif agent.inventory == cfg.CELL_WOOD and agent._wood_craft_progress > 0:
+            for i in range(agent._wood_craft_progress):
+                pygame.draw.circle(screen, cfg.COLOR_CELL_WOOD,
+                                    (px - 6 + i * 3, py - r - 12), 2)
+            dot = (px, py - r - 5)
+            pygame.draw.circle(screen, cfg.COLOR_AGENT_OUTLINE, dot, 4)
+            pygame.draw.circle(screen, cfg.COLOR_CELL_WOOD, dot, 3)
+        elif agent.inventory is not None:
             dot = (px, py - r - 5)
             pygame.draw.circle(screen, cfg.COLOR_AGENT_OUTLINE, dot, 4)
             pygame.draw.circle(screen, _CELL_COLORS.get(agent.inventory,

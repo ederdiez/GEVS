@@ -12,19 +12,20 @@ ventana. Contiene dos cosas:
   | ----- | ---------------- | ----------------------------------------- |
   | 0     | `CELL_EMPTY`     | suelo vacío                               |
   | 2     | `CELL_RESOURCE`  | comida, verde, caminable                  |
-  | 3     | `CELL_ROCK`      | roca, colisionable                        |
-  | 4     | `CELL_WOOD`      | madera, colisionable                      |
+  | 3     | `CELL_ROCK`      | roca, colisionable (único obstáculo real) |
+  | 4     | `CELL_WOOD`      | madera, caminable y recogible (como la comida; ver [Agentes → Inventario](agentes.md)) |
+  | 5     | `CELL_SPEAR`     | lanza, caminable; nunca procedimental — solo aparece al fabricarla o al soltarla |
 
   Se genera de forma procedimental con semilla fija (`WORLD_SEED = 42`) en
   tres pasadas sobre celdas vacías: rocas (`ROCK_DENSITY = 0.08`), madera
   (`WOOD_DENSITY = 0.04`) y comida (`RESOURCE_DENSITY = 0.04`). Mismo seed,
-  mismo mundo.
+  mismo mundo. `CELL_SPEAR` nunca se genera en esta fase.
 
   El grid **no tiene borde**: es un mundo toroidal ("esférico"). Cruzar un
   extremo envuelve al lado opuesto — `World.wrap(x, y)` hace `x % cols, y
   % rows`, y todas las consultas de celda/movimiento pasan por ahí
   (`cell_type`, `is_walkable`, `try_claim`, `release`, el spawn de hijos...).
-  Lo único que detiene a un agente son las rocas y la madera.
+  Lo único que detiene a un agente son las rocas.
 
 - **El reloj simulado** `time_sim`: un día dura `DAY_LENGTH_S = 60` s
   reales. De él se derivan `hour` (0–24 h) y `daylight_factor` (0 = noche,
@@ -35,13 +36,14 @@ ventana. Contiene dos cosas:
 | Método / atributo       | Qué hace / devuelve                           |
 | ----------------------- | --------------------------------------------- |
 | `wrap(x, y)`             | Envuelve una coordenada al grid toroidal (`x % cols, y % rows`); sirve tanto para celdas (int) como posiciones (float). |
-| `is_walkable(x, y)`     | `True` si la celda (envuelta) no es roca ni madera (la comida sí es caminable). |
+| `is_walkable(x, y)`     | `True` si la celda (envuelta) no es roca (comida, madera y una lanza en el suelo son todas caminables). |
 | `cell_type(x, y)`       | Tipo de celda (envuelta al grid; el mundo no tiene fuera de límites). |
 | `hour`                  | Hora simulada (0.0–24.0).                     |
 | `daylight_factor`       | 0.0 noche → 1.0 día pleno (interpolación lineal). |
 | `day`                   | Número de día simulado.                       |
-| `food_cells`            | `set` de `(x, y)` con comida (en sync con el grid). |
-| `consume_resource(x, y)`| Comer: la celda se vacía y arranca su timer de regrow. |
+| `food_cells`            | `set` de `(x, y)` con comida (en sync con el grid; madera/lanza no tienen índice propio). |
+| `consume_cell(x, y)`    | Recoger/comer lo que haya en la celda: se vacía y, si su tipo regenera (`RESOURCE_REGROW_S`/`WOOD_REGROW_S`), arranca su timer. Una lanza nunca regenera. |
+| `place_cell(x, y, cell_type)` | Soltar `cell_type` en la celda (comida, madera o lanza); se marca como "dropped" para no pagar recompensa al volver a agarrarla. |
 | `try_claim(x, y, agent)`| Intentar ocupar la celda: `False` si está ocupada o no es caminable. |
 | `release(x, y, agent)`  | Soltar la claim (solo el dueño puede).        |
 | `occupied`              | `dict` `(x, y) → agent`: las celdas reclamadas (nunca dos agentes en una). |

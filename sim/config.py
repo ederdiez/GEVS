@@ -37,7 +37,8 @@ CAMERA_PAN_SPEED = 20.0        # cells/second while a pan key is held (WASD/arro
 CELL_EMPTY = 0
 CELL_RESOURCE = 2             # food (green)
 CELL_ROCK = 3                 # rock: collidable (future functionality pending)
-CELL_WOOD = 4                 # wood: collidable (future functionality pending)
+CELL_WOOD = 4                 # wood: walkable and collectible, like food (see WOOD_CRAFT_INTERACTIONS)
+CELL_SPEAR = 5                 # spear: never generated procedurally or regrown, only crafted from wood or dropped
 
 # --- Procedural generation (densities 0.0-1.0) ---
 ROCK_DENSITY = 0.08
@@ -50,6 +51,7 @@ COLOR_FLOOR_NIGHT = (24, 28, 38)     # floor at full night
 COLOR_CELL_ROCK = (116, 106, 96)     # rock (gray-brown)
 COLOR_CELL_WOOD = (139, 101, 54)     # wood (brown)
 COLOR_CELL_RESOURCE = (48, 148, 96)  # food (green)
+COLOR_CELL_SPEAR = (200, 180, 140)   # spear (light shaft, distinct from raw wood)
 
 # --- Day/night cycle (simulated hours) ---
 DAY_LENGTH_S = 60.0          # real seconds per simulated day (1 h = 2.5 real s)
@@ -99,6 +101,8 @@ SLEEP_RECOVERY_SIGMA_RISE = 1.5     # s; spread of the climb INTO deep sleep (st
 SLEEP_RECOVERY_SIGMA_FALL = 10.0    # s; spread of the ease OUT of deep sleep (long tail)
 
 RESOURCE_REGROW_S = 100.0   # seconds until an eaten food cell regrows
+WOOD_REGROW_S = 100.0      # seconds until a grabbed wood cell regrows (same cadence as food)
+WOOD_CRAFT_INTERACTIONS = 5  # valid `interact` uses of carried wood needed to craft a spear
 FOOD_SENSE_RANGE = 8.0     # cells; beyond this the brain gets no food direction
 AGENT_SENSE_RANGE = 2.0    # cells; "personal space" — nearest-agent sensors below this
 BLOCKED_PROBE_S = 0.5      # s; while holding a blocked cell, re-probe it this often
@@ -108,6 +112,7 @@ DETOUR_S = 0.4             # s; slide around a rock/border before resuming (2.4 
 BASE_AGENT_HP = 100.0      # * genome trait "hp" = hp_max at birth
 BASE_AGENT_DAMAGE = 15.0   # * genome trait "damage" = damage dealt by attack
 ATTACK_COOLDOWN_S = 0.5    # s between hits, both agent attack and animal attack
+SPEAR_DAMAGE_MULT = 1.5    # attack damage multiplier while an equipped spear (CELL_SPEAR) is in inventory
 
 # Agent colors (drawing.py): state -> color
 COLOR_AGENT_WANDER = (200, 200, 210)   # active, not hungry

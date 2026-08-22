@@ -1,14 +1,17 @@
 """World: a grid of cells, a day/night clock, and the agents inside it.
 
 Pure logic, no pygame (testable headless). Cells are ints, see
-sim.config: CELL_EMPTY, CELL_RESOURCE, CELL_ROCK, CELL_WOOD. The grid has
-no border: it wraps toroidally (see World.wrap), so a "spherical" world.
-The clock advances in update(dt) and drives the day/night cycle.
+sim.config: CELL_EMPTY, CELL_RESOURCE, CELL_ROCK, CELL_WOOD, CELL_SPEAR.
+The grid has no border: it wraps toroidally (see World.wrap), so a
+"spherical" world. The clock advances in update(dt) and drives the
+day/night cycle.
 
-Food (resources) can be eaten: the cell empties and regrows after
-RESOURCE_REGROW_S. Agents occupy cells exclusively via claims
-(`occupied`), so two agents never share a cell. Animals (sim.animal,
-predators) live in a separate list and don't claim cells.
+Food, wood and a dropped spear can all be picked up: the cell empties and
+regrows on a per-type timer (see _REGROW_S; a spear never regrows, only
+crafting or dropping puts one on the grid). Agents occupy cells
+exclusively via claims (`occupied`), so two agents never share a cell.
+Animals (sim.animal, predators) live in a separate list and don't claim
+cells.
 """
 
 import random
@@ -16,6 +19,12 @@ import random
 from sim import config as cfg
 from sim.agent import Agent
 from sim.animal import Animal
+
+# Cell types agents can walk onto and pick up. Only food regrows on its
+# own; wood regrows too (see _REGROW_S) but a spear never does — it only
+# ever appears via crafting or a drop.
+_COLLECTIBLE = (cfg.CELL_RESOURCE, cfg.CELL_WOOD, cfg.CELL_SPEAR)
+_REGROW_S = {cfg.CELL_RESOURCE: cfg.RESOURCE_REGROW_S, cfg.CELL_WOOD: cfg.WOOD_REGROW_S}
 
 
 class World:
@@ -36,11 +45,11 @@ class World:
         self.grid = self._generate_grid()
         self.entities = []
 
-        # --- food (resources that can be eaten and regrow) ---
-        self.regrow_timers = {}              # (x, y) -> seconds until regrowth
-        # Food an agent put down rather than food the world grew. Picking it
-        # back up pays no reward (agent.py), which is what stops the
-        # grab -> drop -> grab reward loop: a dropped resource lands on the
+        # --- collectible cells (food, wood: eaten/grabbed and regrow) ---
+        self.regrow_timers = {}              # (x, y) -> (seconds left, cell_type)
+        # An item an agent put down rather than one the world grew. Picking
+        # it back up pays no reward (agent.py), which is what stops the
+        # grab -> drop -> grab reward loop: a dropped item lands on the
         # dropper's own cell, so it is instantly re-grabbable.
         self.dropped_cells = set()
         self.stats_resource_eaten = 0
@@ -93,7 +102,7 @@ class World:
         produces the same spawn points.
         """
         spots = [(x, y) for y in range(self.rows) for x in range(self.cols)
-                 if self.is_walkable(x, y) and self.grid[y][x] != cfg.CELL_RESOURCE]
+                 if self.is_walkable(x, y) and self.grid[y][x] not in _COLLECTIBLE]
         self.rng.shuffle(spots)
         for cx, cy in spots[:cfg.AGENT_COUNT]:
             self.spawn_agent(cx, cy)
@@ -163,47 +172,58 @@ class World:
                 self.animals.append(Animal(self, cx, cy))
 
     def _update_regrowth(self, dt: float) -> None:
-        """Count down regrow timers; a timer reaching 0 restores the food."""
-        for (x, y), left in list(self.regrow_timers.items()):
+        """Count down regrow timers; a timer reaching 0 restores the cell
+        to whatever type it was (food or wood — a spear never regrows, it
+        never gets a timer, see _REGROW_S)."""
+        for (x, y), (left, cell) in list(self.regrow_timers.items()):
             left -= dt
             if left <= 0:
                 del self.regrow_timers[(x, y)]
-                self.grid[y][x] = cfg.CELL_RESOURCE
-                self.food_cells.add((x, y))
-                self.stats_resource_regrown += 1
+                self.grid[y][x] = cell
+                if cell == cfg.CELL_RESOURCE:
+                    self.food_cells.add((x, y))
+                    self.stats_resource_regrown += 1
             else:
-                self.regrow_timers[(x, y)] = left
+                self.regrow_timers[(x, y)] = (left, cell)
 
-    # -- food and claims (used by agents) --
+    # -- collectible cells and claims (used by agents) --
 
-    def consume_resource(self, x: int, y: int) -> None:
-        """Take the food at (x, y) off the grid: the cell empties and starts
-        regrowing. Both eating off the ground and grabbing into the
-        inventory come through here — this is about the *cell*, not about
-        nutrition, so it does not touch the meal counter (see record_meal)."""
+    def consume_cell(self, x: int, y: int) -> None:
+        """Take whatever collectible is at (x, y) off the grid: the cell
+        empties and, if its type regrows (see _REGROW_S), starts a timer.
+        Eating off the ground, grabbing into the inventory, and picking up
+        dropped wood/spear all come through here — this is about the
+        *cell*, not about nutrition, so it does not touch the meal counter
+        (see record_meal)."""
         x, y = self.wrap(x, y)
+        cell = self.grid[y][x]
         self.grid[y][x] = cfg.CELL_EMPTY
         self.food_cells.discard((x, y))
         self.dropped_cells.discard((x, y))
-        self.regrow_timers[(x, y)] = cfg.RESOURCE_REGROW_S
+        if cell in _REGROW_S:
+            self.regrow_timers[(x, y)] = (_REGROW_S[cell], cell)
+        else:
+            self.regrow_timers.pop((x, y), None)
 
-    def place_resource(self, x: int, y: int) -> None:
-        """Put food at (x, y), e.g. an agent dropping its inventory. The
-        inverse of consume_resource: no regrow timer, it's already there.
+    def place_cell(self, x: int, y: int, cell_type: int) -> None:
+        """Put cell_type at (x, y), e.g. an agent dropping its inventory.
+        The inverse of consume_cell: no regrow timer, it's already there.
         The cell is marked as dropped so re-grabbing it pays no reward."""
         x, y = self.wrap(x, y)
-        self.grid[y][x] = cfg.CELL_RESOURCE
-        self.food_cells.add((x, y))
+        self.grid[y][x] = cell_type
+        if cell_type == cfg.CELL_RESOURCE:
+            self.food_cells.add((x, y))
         self.dropped_cells.add((x, y))
         self.regrow_timers.pop((x, y), None)
 
     def is_dropped(self, x: int, y: int) -> bool:
-        """True if the food at (x, y) was put there by an agent, not grown."""
+        """True if the item at (x, y) was put there by an agent, not grown
+        or crafted in place."""
         return self.wrap(x, y) in self.dropped_cells
 
     def record_meal(self) -> None:
         """One agent started eating one resource. Counted here rather than
-        in consume_resource so a grab (which empties a cell but feeds
+        in consume_cell so a grab (which empties a cell but feeds
         nobody) never inflates the stat."""
         self.stats_resource_eaten += 1
 
@@ -238,10 +258,11 @@ class World:
         self.stats_deaths += 1
 
     def _cell_free_for_spawn(self, x: int, y: int) -> bool:
-        """Walkable, unclaimed and food-free: a valid birth cell."""
+        """Walkable, unclaimed and empty (no food/wood/spear underfoot): a
+        valid birth cell."""
         x, y = self.wrap(x, y)
         return (self.is_walkable(x, y) and (x, y) not in self.occupied
-                and self.grid[y][x] != cfg.CELL_RESOURCE)
+                and self.grid[y][x] not in _COLLECTIBLE)
 
     def _find_child_spot(self, anchor) -> tuple | None:
         """First free cell around anchor, in a fixed deterministic order
@@ -341,7 +362,7 @@ class World:
         return self.grid[y][x]
 
     def is_walkable(self, x: int, y: int) -> bool:
-        """True on empty cells and food; rocks and wood are collidable."""
+        """True everywhere except rocks (food, wood, and a dropped spear
+        are all walkable and collectible)."""
         x, y = self.wrap(x, y)
-        return (self.grid[y][x] != cfg.CELL_ROCK
-                and self.grid[y][x] != cfg.CELL_WOOD)
+        return self.grid[y][x] != cfg.CELL_ROCK

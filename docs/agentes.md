@@ -19,6 +19,11 @@ comer del suelo) y `drop` la deja caer sobre una celda vacía. Añadir un
 objeto llevable nuevo (no comida) es registrar su propio par
 `(interact_fn, drop_fn)` en esa tabla —ambas devuelven `True` si el objeto
 salió del inventario—; el cuerpo nunca hace casos especiales por tipo.
+Madera y lanza son el primer caso real de esa extensión: `interact` sobre
+madera cuenta como una interacción de fabricación (`WOOD_CRAFT_INTERACTIONS`
+de ellas convierten la madera en lanza in situ, sin que salga nunca del
+inventario) y `interact` sobre una lanza equipada no hace nada, porque su
+bonus de daño es pasivo (ver [Depredadores](#depredadores)).
 
 ## Entradas de la red (17, normalizadas a [0,1])
 
@@ -69,13 +74,13 @@ hacia el lado equivocado.
 
 | Salida       | Intención        | El cuerpo hace |
 |--------------|------------------|----------------|
-| `move_x`, `move_y` | dirección deseada (`2v−1 ∈ [−1,1]`) | avanzar a `AGENT_SPEED` celdas/s, con claims por eje; celda bloqueada → sostén pegajoso por eje (sin temblor) + re-sondeo cada `BLOCKED_PROBE_S`, o rodeo de `DETOUR_S` si la celda es una roca o madera (ver Evitación de choques). El mapa no tiene borde: cruzar un extremo envuelve al lado opuesto (mundo toroidal, ver [Mundo](mundo.md)) |
+| `move_x`, `move_y` | dirección deseada (`2v−1 ∈ [−1,1]`) | avanzar a `AGENT_SPEED` celdas/s, con claims por eje; celda bloqueada → sostén pegajoso por eje (sin temblor) + re-sondeo cada `BLOCKED_PROBE_S`, o rodeo de `DETOUR_S` si la celda es una roca (ver Evitación de choques). El mapa no tiene borde: cruzar un extremo envuelve al lado opuesto (mundo toroidal, ver [Mundo](mundo.md)) |
 | `eat`        | comer            | si `eat > EAT_OUTPUT_THRESHOLD` (0.5) y el agente está sobre comida → comer (celda se vacía, regrow) |
 | `rest`       | descansar        | si `rest > REST_OUTPUT_THRESHOLD` (0.6) → no moverse y recuperar energía |
-| `grab`       | recoger          | si `grab > GRAB_OUTPUT_THRESHOLD` (0.4) y hay comida bajo el agente → pasa a su inventario (una ranura); la celda se vacía (mismo timer de regrow que comer) pero la comida se lleva, no se consume. El cuerpo ignora `grab` si el inventario está lleno. |
-| `interact`   | usar lo llevado  | si `interact > INTERACT_OUTPUT_THRESHOLD` (0.4), hay algo en el inventario y el agente no está ya comiendo → dispatch por tipo de objeto; para comida, arranca el mismo `eat_timer` que comer del suelo y vacía el inventario. |
-| `drop`       | soltar lo llevado | si `drop > DROP_OUTPUT_THRESHOLD` (0.4), hay algo en el inventario y la celda del agente está vacía → dispatch por tipo de objeto; para comida, la deja en el suelo (`world.place_resource`) y vacía el inventario. |
-| `attack`     | golpear un animal | si `attack > ATTACK_OUTPUT_THRESHOLD` (0.4) y el animal más cercano es un depredador a distancia ≤ 1 celda → le inflige `damage` (rasgo genético); si el hp del animal llega a 0, muere. Ver [Depredadores](#depredadores). |
+| `grab`       | recoger          | si `grab > GRAB_OUTPUT_THRESHOLD` (0.4) y hay comida, madera o una lanza tirada bajo el agente → pasa a su inventario (una ranura); la celda se vacía (mismo timer de regrow que comer, si el tipo regenera) pero el objeto se lleva, no se consume. El cuerpo ignora `grab` si el inventario está lleno. |
+| `interact`   | usar lo llevado  | si `interact > INTERACT_OUTPUT_THRESHOLD` (0.4), hay algo en el inventario y el agente no está ya comiendo → dispatch por tipo de objeto; para comida, arranca el mismo `eat_timer` que comer del suelo y vacía el inventario; para madera, cuenta como una interacción de fabricación (`WOOD_CRAFT_INTERACTIONS` de ellas → lanza, ver arriba); para una lanza equipada, no hace nada. |
+| `drop`       | soltar lo llevado | si `drop > DROP_OUTPUT_THRESHOLD` (0.4), hay algo en el inventario y la celda del agente está vacía → dispatch por tipo de objeto; para comida, madera o lanza, la deja en el suelo (`world.place_cell`) y vacía el inventario. |
+| `attack`     | golpear un animal | si `attack > ATTACK_OUTPUT_THRESHOLD` (0.4) y el animal más cercano es un depredador a distancia ≤ 1 celda → le inflige `damage` (rasgo genético), multiplicado por `SPEAR_DAMAGE_MULT` si el agente lleva una lanza equipada (`inventory == CELL_SPEAR`); si el hp del animal llega a 0, muere. Ver [Depredadores](#depredadores). |
 
 **Reflejo de supervivencia** (por debajo del cerebro, como en la biología):
 si `hunger > HUNGER_CRITICAL` (0.85), el agente ignora `rest` y sigue
@@ -154,7 +159,7 @@ cuerpo se queda quieto y firme (sin temblar). Tiene dos mitades:
   - Si la celda es una **claim ajena**, la posición se congela en ese eje y
     la celda se re-sondea cada `BLOCKED_PROBE_S = 0.5` s (el otro agente se
     moverá; si cambias de dirección, el sostén se suelta y te vas).
-  - Si la celda es una **roca o madera** (nunca se libera, no merece la
+  - Si la celda es una **roca** (nunca se libera, no merece la
     pena sondear — el mapa ya no tiene borde: los extremos envuelven, ver
     [Mundo](mundo.md)), arranca un rodeo de `DETOUR_S = 0.4` s
     deslizándose por el eje tangente hacia el lado de la comida; los rodeos

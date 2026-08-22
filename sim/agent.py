@@ -101,7 +101,54 @@ def _drop_resource(agent) -> bool:
         return False  # can't put down what you just picked up (see config.py)
     if agent.world.cell_type(agent.cx, agent.cy) != cfg.CELL_EMPTY:
         return False
-    agent.world.place_resource(agent.cx, agent.cy)
+    agent.world.place_cell(agent.cx, agent.cy, cfg.CELL_RESOURCE)
+    agent.inventory = None
+    agent._carry_time = 0.0
+    return True
+
+
+def _interact_wood(agent) -> bool:
+    """Work the carried wood toward a spear: WOOD_CRAFT_INTERACTIONS valid
+    interactions turn it into a spear in place. The wood never actually
+    "leaves" the inventory (it just changes type), so this always returns
+    False — the interact_fn return value is unused by the dispatcher
+    anyway (only drop_fn's is). Progress is lost if the wood ever leaves
+    the slot (see the grab path in update())."""
+    agent._wood_craft_progress += 1
+    if agent._wood_craft_progress >= cfg.WOOD_CRAFT_INTERACTIONS:
+        agent.inventory = cfg.CELL_SPEAR
+        agent._wood_craft_progress = 0
+    return False
+
+
+def _drop_wood(agent) -> bool:
+    """Mirrors _drop_resource: drop the carried wood, whatever its craft
+    progress, onto an empty cell under the agent."""
+    if agent._carry_time < cfg.CARRY_MIN_S:
+        return False
+    if agent.world.cell_type(agent.cx, agent.cy) != cfg.CELL_EMPTY:
+        return False
+    agent.world.place_cell(agent.cx, agent.cy, cfg.CELL_WOOD)
+    agent.inventory = None
+    agent._carry_time = 0.0
+    agent._wood_craft_progress = 0
+    return True
+
+
+def _interact_spear(agent) -> bool:
+    """The spear's damage boost is passive (see the attack block in
+    update()) — interacting with an equipped spear does nothing."""
+    return False
+
+
+def _drop_spear(agent) -> bool:
+    """Mirrors _drop_resource: drop the equipped spear onto an empty cell
+    under the agent."""
+    if agent._carry_time < cfg.CARRY_MIN_S:
+        return False
+    if agent.world.cell_type(agent.cx, agent.cy) != cfg.CELL_EMPTY:
+        return False
+    agent.world.place_cell(agent.cx, agent.cy, cfg.CELL_SPEAR)
     agent.inventory = None
     agent._carry_time = 0.0
     return True
@@ -111,9 +158,12 @@ def _drop_resource(agent) -> bool:
 # (cfg.CELL_*) registers both under this same shape — both return True if
 # the item left the inventory — so the dispatch in Agent.update() never
 # special-cases food: adding a new carryable item only means adding one
-# entry here.
+# entry here. Wood and a crafted spear are the first real use of that
+# extension point.
 _INVENTORY_ACTIONS = {
     cfg.CELL_RESOURCE: (_interact_resource, _drop_resource),
+    cfg.CELL_WOOD: (_interact_wood, _drop_wood),
+    cfg.CELL_SPEAR: (_interact_spear, _drop_spear),
 }
 
 
@@ -173,6 +223,7 @@ class Agent:
         # down) — see _INVENTORY_ACTIONS.
         self.inventory = None
         self._carry_time = 0.0     # s the current inventory item has been held
+        self._wood_craft_progress = 0  # valid interacts toward a spear while carrying wood
         self._meal_from_inventory = False  # did the meal being chewed come from the slot?
         self._last_inputs = None   # this tick's brain inputs, kept for the inspector
 
@@ -182,9 +233,9 @@ class Agent:
         # other agent will move).
         self._holds = {}
 
-        # Detour: rocks and wood never free, so instead of holding, slide
-        # along the tangent axis for DETOUR_S to walk around them (see
-        # _start_detour). The map itself has no border — edges wrap.
+        # Detour: rocks never free, so instead of holding, slide along the
+        # tangent axis for DETOUR_S to walk around them (see _start_detour).
+        # The map itself has no border — edges wrap.
         self._detour_axis = None
         self._detour_sign = 0
         self._detour_timer = 0.0
@@ -361,7 +412,9 @@ class Agent:
         if self._attack_cooldown <= 0.0 and self.attack_out > cfg.ATTACK_OUTPUT_THRESHOLD:
             animal, _, _, adist = self._animal_dir()
             if animal is not None and animal.is_predator and adist <= 1.0:
-                animal.take_damage(self.damage)
+                dmg = (self.damage * cfg.SPEAR_DAMAGE_MULT
+                       if self.inventory == cfg.CELL_SPEAR else self.damage)
+                animal.take_damage(dmg)
                 self._attack_cooldown = cfg.ATTACK_COOLDOWN_S
                 if animal.hp <= 0.0:
                     self.world.kill_animal(animal)
@@ -386,23 +439,27 @@ class Agent:
             resting = False
         self._resting = resting
 
-        # Grab (pick up): the brain's grab output takes the food under the
-        # agent into its one-slot inventory — the cell empties (like
-        # eating, same regrow timer) but the food is carried, not consumed.
+        # Grab (pick up): the brain's grab output takes whatever collectible
+        # is under the agent into its one-slot inventory (food, wood, or a
+        # dropped spear — any cfg.CELL_* type registered in
+        # _INVENTORY_ACTIONS) — the cell empties (like eating, same regrow
+        # timer where it applies) but the item is carried, not consumed.
         # The body enforces the single slot: while the inventory is full,
         # grab is ignored no matter what the brain demands.
         grabbed = False
         grab_rewarded = False
+        cell = self.world.cell_type(self.cx, self.cy)
         if (self.inventory is None
                 and self.grab_out > cfg.GRAB_OUTPUT_THRESHOLD
-                and self.world.cell_type(self.cx, self.cy) == cfg.CELL_RESOURCE):
-            # Food an agent dropped is still food, but picking it back up
-            # earns nothing — otherwise grab -> drop -> grab on one's own
-            # cell would be an infinite reward loop (world.dropped_cells).
+                and cell in _INVENTORY_ACTIONS):
+            # An item an agent dropped is still there, but picking it back
+            # up earns nothing — otherwise grab -> drop -> grab on one's
+            # own cell would be an infinite reward loop (world.dropped_cells).
             grab_rewarded = not self.world.is_dropped(self.cx, self.cy)
-            self.world.consume_resource(self.cx, self.cy)
-            self.inventory = cfg.CELL_RESOURCE
+            self.world.consume_cell(self.cx, self.cy)
+            self.inventory = cell
             self._carry_time = 0.0
+            self._wood_craft_progress = 0
             grabbed = True
 
         # Inventory actions: interact (use what's carried — dispatched by
@@ -410,6 +467,7 @@ class Agent:
         # skipped while already eating, so it can't restart the eat_timer
         # mid-meal.
         dropped = False
+        was_food = self.inventory == cfg.CELL_RESOURCE
         if self.inventory is not None:
             interact_fn, drop_fn = _INVENTORY_ACTIONS[self.inventory]
             if self.interact_out > cfg.INTERACT_OUTPUT_THRESHOLD and self.eat_timer <= 0:
@@ -425,7 +483,7 @@ class Agent:
             self.hunger = max(0.0, self.hunger - self.eat_rate * dt)
         elif self.eat_out > cfg.EAT_OUTPUT_THRESHOLD and \
                 self.world.cell_type(self.cx, self.cy) == cfg.CELL_RESOURCE:
-            self.world.consume_resource(self.cx, self.cy)
+            self.world.consume_cell(self.cx, self.cy)
             self.eat_timer = cfg.EAT_DURATION_S
             self._meal_from_inventory = False
             self.world.record_meal()
@@ -533,13 +591,16 @@ class Agent:
         #    not stack the grab reward on top of the plain meal reward.
         if grabbed and grab_rewarded and self.inventory is not None:
             reward += cfg.REWARD_GRAB
-        # 3. Throwing away food you need.
-        if dropped and self.hunger > cfg.HUNGER_WARNING:
+        # 3. Throwing away food you need (wood/spear aren't food, so
+        #    dropping those never triggers this).
+        if dropped and was_food and self.hunger > cfg.HUNGER_WARNING:
             reward += cfg.PENALTY_DROP_HUNGRY
         # 4. Starving with the solution in hand. Not the old blanket hunger
-        #    punishment: this needs a full inventory, so the agent still on
-        #    its way to food — the case that broke that attempt — never pays it.
-        if self.inventory is not None and self.hunger > cfg.HUNGER_CRITICAL:
+        #    punishment: this needs a full inventory *of food*, so an agent
+        #    carrying wood/a spear (which can't be eaten) never pays it, and
+        #    the agent still on its way to food — the case that broke that
+        #    attempt — never pays it either.
+        if self.inventory == cfg.CELL_RESOURCE and self.hunger > cfg.HUNGER_CRITICAL:
             reward += cfg.PENALTY_STARVING_WITH_FOOD * dt
         # 5. Damage taken from a predator this tick, relative to hp_max so
         #    the `hp` trait doesn't rescale the reward (see config.py).
@@ -569,8 +630,8 @@ class Agent:
         - another agent owns the cell -> sticky hold: the position stays
           frozen on this axis and the cell is re-probed every
           BLOCKED_PROBE_S (polite wait; the other agent will move);
-        - a rock or wood -> it will never free, so start a DETOUR_S slide
-          along the tangent axis to walk around it.
+        - a rock -> it will never free, so start a DETOUR_S slide along
+          the tangent axis to walk around it.
         Sliding on the other axis is untouched (each axis is its own call).
         """
         # Zero push (the other axis is doing the work): must not touch the
@@ -636,9 +697,9 @@ class Agent:
             self.x, self.y = new_x, new_y
 
     def _start_detour(self, axis: str, sign: int) -> None:
-        """Walk around a rock or wood cell (one that will never free —
-        holding would freeze the agent forever). The map border no longer
-        blocks: edges wrap onto the opposite side of the grid.
+        """Walk around a rock (a cell that will never free — holding would
+        freeze the agent forever). The map border no longer blocks: edges
+        wrap onto the opposite side of the grid.
 
         First slide along the tangent axis, on the side that reduces
         Manhattan distance to the nearest food (arbitrary side if food is
@@ -672,3 +733,52 @@ class Agent:
             tangent = -tangent  # zigzag: try the other flank of the cluster
         self._detour_sign = tangent
         self._holds.pop('y' if axis == 'x' else 'x', None)
+
+
+def _selfcheck() -> None:
+    """Minimal check for the wood -> spear crafting path: grab, craft,
+    drop/re-pickup, and the attack damage boost. Exercises the helper
+    functions directly (not the brain) so it doesn't depend on any output
+    crossing threshold."""
+    from sim.world import World
+
+    world = World(cols=20, rows=20, seed=1)
+    agent = world.entities[0]
+    x, y = agent.cx, agent.cy
+
+    # grab: force a wood cell under the agent, mirror the grab dispatch.
+    world.grid[y][x] = cfg.CELL_WOOD
+    world.consume_cell(x, y)
+    agent.inventory = cfg.CELL_WOOD
+    agent._wood_craft_progress = 0
+    assert agent.inventory == cfg.CELL_WOOD
+
+    # craft: WOOD_CRAFT_INTERACTIONS interactions turn wood into a spear.
+    for _ in range(cfg.WOOD_CRAFT_INTERACTIONS):
+        _interact_wood(agent)
+    assert agent.inventory == cfg.CELL_SPEAR
+    assert agent._wood_craft_progress == 0
+
+    # drop the spear, then grab a fresh wood item and drop that too.
+    agent._carry_time = cfg.CARRY_MIN_S
+    assert _drop_spear(agent) is True
+    assert world.grid[y][x] == cfg.CELL_SPEAR
+    assert world.is_dropped(x, y)
+
+    world.grid[y][x] = cfg.CELL_EMPTY
+    agent.inventory = cfg.CELL_WOOD
+    agent._carry_time = cfg.CARRY_MIN_S
+    assert _drop_wood(agent) is True
+    assert world.grid[y][x] == cfg.CELL_WOOD
+    assert world.is_dropped(x, y)
+
+    # a spear equipped in the inventory boosts attack damage.
+    damage_bare = agent.damage
+    damage_speared = agent.damage * cfg.SPEAR_DAMAGE_MULT
+    assert damage_speared > damage_bare
+
+    print("agent self-check OK")
+
+
+if __name__ == "__main__":
+    _selfcheck()
