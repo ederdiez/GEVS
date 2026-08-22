@@ -17,9 +17,11 @@ INPUT_LABELS = [
     "hunger", "energy", "night", "food_dx", "food_dy",
     "food_close", "noise", "other_dx", "other_dy", "other_close", "has_food",
     "pos_x", "pos_y", "animal_dx", "animal_dy", "animal_close", "animal_danger",
+    "agent_spear",
 ]
 HIDDEN_LABELS = ["food_x", "food_y", "sleepy", "night", "food_ahead", "carrying", "learn_1", "learn_2"]
-OUTPUT_LABELS = ["move_x", "move_y", "eat", "rest", "grab", "interact", "drop", "attack"]
+OUTPUT_LABELS = ["move_x", "move_y", "eat", "rest", "grab", "interact", "drop", "attack",
+                 "target_animal", "target_agent"]
 
 _font = None
 
@@ -182,7 +184,7 @@ def draw_inspector(surface, agent) -> None:
     # Raw output values + thresholds, spelled out below the diagram.
     y2 = surface.get_height() - 82
     (move_x, move_y, eat_out, rest_out, grab_out, interact_out, drop_out,
-     attack_out) = outputs
+     attack_out, target_animal_out, target_agent_out) = outputs
     lines = [
         f"eat  {eat_out:.2f}  (> {cfg.EAT_OUTPUT_THRESHOLD:.2f} to eat)",
         f"rest {rest_out:.2f}  (> {cfg.REST_OUTPUT_THRESHOLD:.2f} to rest)",
@@ -190,6 +192,8 @@ def draw_inspector(surface, agent) -> None:
         f"interact {interact_out:.2f}  (> {cfg.INTERACT_OUTPUT_THRESHOLD:.2f} to interact)",
         f"drop {drop_out:.2f}  (> {cfg.DROP_OUTPUT_THRESHOLD:.2f} to drop)",
         f"attack {attack_out:.2f}  (> {cfg.ATTACK_OUTPUT_THRESHOLD:.2f} to attack)",
+        f"target_animal {target_animal_out:.2f}  (> {cfg.TARGET_ANIMAL_OUTPUT_THRESHOLD:.2f})",
+        f"target_agent {target_agent_out:.2f}  (> {cfg.TARGET_AGENT_OUTPUT_THRESHOLD:.2f})",
     ]
     for line in lines:
         y2 += _draw_text(surface, line, (x, y2), cfg.COLOR_INSPECTOR_MUTED) + 2

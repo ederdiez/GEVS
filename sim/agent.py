@@ -233,6 +233,8 @@ class Agent:
         self.interact_out = 0.0
         self.drop_out = 0.0
         self.attack_out = 0.0
+        self.target_animal_out = 0.0
+        self.target_agent_out = 0.0
         self.state = "active"      # derived: eating / resting / active
         # Carried resource (one slot; None or a cfg.CELL_* int). Filled by
         # the grab output, emptied by interact (use it) or drop (put it
@@ -270,8 +272,9 @@ class Agent:
         world = self.world
         dx, dy, dist = self._food_dir()
         food_close = 1.0 - min(dist / self.food_sense_range, 1.0) if dist is not None else 0.0
-        odx, ody, odist = self._other_agent()
+        other, odx, ody, odist = self._other_agent()
         other_close = 1.0 - min(odist / cfg.AGENT_SENSE_RANGE, 1.0) if odist is not None else 0.0
+        agent_has_spear = 1.0 if (other is not None and other.inventory == cfg.CELL_SPEAR) else 0.0
         _animal, adx, ady, adist = self._animal_dir()
         animal_close = 1.0 - min(adist / cfg.ANIMAL_SENSE_RANGE, 1.0) if adist is not None else 0.0
         animal_danger = 1.0 if (_animal is not None and _animal.is_predator) else 0.0
@@ -307,6 +310,10 @@ class Agent:
             (max(-1.0, min(1.0, ady)) + 1.0) / 2.0 if ady is not None else 0.5,
             animal_close,
             animal_danger,
+            # Ground truth like animal_danger: whether the nearest other
+            # agent is carrying a spear. Reacting to it (avoid, target) is
+            # learned in life, not hand-tuned (LEARNABLE_CELLS, config.py).
+            agent_has_spear,
         ]
 
     def _food_dir(self):
@@ -329,11 +336,14 @@ class Agent:
         return (dx, dy, dist)
 
     def _other_agent(self):
-        """Nearest other agent by Manhattan; (dx, dy, dist) or (None, None, None).
+        """Nearest other agent by Manhattan; (other, dx, dy, dist) or
+        (None, None, None, None).
 
-        Mirrors `_food_dir`: a pure function of positions, no new randomness,
-        so determinism is preserved. Only senses within AGENT_SENSE_RANGE —
-        "personal space" — so the avoidance signal engages near contact only.
+        Mirrors `_animal_dir`: returns the agent object too (not just the
+        delta), since the attack action needs to know who to hit. A pure
+        function of positions, no new randomness, so determinism is
+        preserved. Only senses within AGENT_SENSE_RANGE — "personal space" —
+        so the avoidance signal engages near contact only.
         """
         best = _nearest_in_window(
             self.world, self.cx, self.cy, cfg.AGENT_SENSE_RANGE,
@@ -341,9 +351,9 @@ class Agent:
             accept=lambda x, y, other: other is not self,
         )
         if best is None:
-            return (None, None, None)
-        dx, dy, dist, _other = best
-        return (dx, dy, dist)
+            return (None, None, None, None)
+        dx, dy, dist, other = best
+        return (other, dx, dy, dist)
 
     def _animal_dir(self):
         """Nearest animal by Manhattan; (animal, dx, dy, dist) or
@@ -420,20 +430,38 @@ class Agent:
         hunger_before = self.hunger
         self._last_inputs = self._inputs()
         (self.move_x, self.move_y, self.eat_out, self.rest_out, self.grab_out,
-         self.interact_out, self.drop_out, self.attack_out) = self.brain.forward(self._last_inputs, dt)
+         self.interact_out, self.drop_out, self.attack_out, self.target_animal_out,
+         self.target_agent_out) = self.brain.forward(self._last_inputs, dt)
 
-        # Attack: strike the nearest animal if it's a predator within reach.
-        # No instinct or reward for landing a hit (config.py) — only the
-        # penalty for being hurt shapes this, same as the flee response.
+        # Attack: strike whichever target the brain locked onto — the
+        # nearest predator (target_animal) or the nearest other agent
+        # (target_agent), within 1 cell. If both cross their threshold the
+        # stronger raw output wins. No instinct or reward for landing a hit
+        # (config.py) — only the penalty for being hurt shapes this, same
+        # as the flee response, for either kind of target.
         if self._attack_cooldown <= 0.0 and self.attack_out > cfg.ATTACK_OUTPUT_THRESHOLD:
-            animal, _, _, adist = self._animal_dir()
-            if animal is not None and animal.is_predator and adist <= 1.0:
+            want_animal = self.target_animal_out > cfg.TARGET_ANIMAL_OUTPUT_THRESHOLD
+            want_agent = self.target_agent_out > cfg.TARGET_AGENT_OUTPUT_THRESHOLD
+            target_animal = want_animal and (not want_agent or self.target_animal_out >= self.target_agent_out)
+            target_agent = want_agent and not target_animal
+
+            victim = None
+            if target_animal:
+                animal, _, _, adist = self._animal_dir()
+                if animal is not None and animal.is_predator and adist <= 1.0:
+                    victim = animal
+            elif target_agent:
+                other, _, _, odist = self._other_agent()
+                if other is not None and odist <= 1.0:
+                    victim = other
+
+            if victim is not None:
                 dmg = (self.damage * cfg.SPEAR_DAMAGE_MULT
                        if self.inventory == cfg.CELL_SPEAR else self.damage)
-                animal.take_damage(dmg)
+                victim.take_damage(dmg)
                 self._attack_cooldown = cfg.ATTACK_COOLDOWN_S
-                if animal.hp <= 0.0:
-                    self.world.kill_animal(animal)
+                if victim.hp <= 0.0:
+                    (self.world.kill_animal if target_animal else self.world.kill)(victim)
 
         # Survival reflex (below the brain, like biology): starving agents
         # never stop to rest — keep searching for food.

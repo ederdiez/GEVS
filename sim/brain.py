@@ -1,10 +1,10 @@
 """Brain: a small multilayer perceptron, vectorized with numpy.
 
-The MLP is the agent's brain: it receives 17 signals and emits 8
-intentions (move_x, move_y, eat, rest, grab, interact, drop, attack). All weights
-live in sim.config (hand-tuned, readable tables); this module only does
-the forward pass. See config.py `# --- Brain ---` for the meaning of
-every unit and every weight.
+The MLP is the agent's brain: it receives 18 signals and emits 10
+intentions (move_x, move_y, eat, rest, grab, interact, drop, attack,
+target_animal, target_agent). All weights live in sim.config (hand-tuned,
+readable tables); this module only does the forward pass. See config.py
+`# --- Brain ---` for the meaning of every unit and every weight.
 
 Each agent builds its own Brain from its Genome's weight tables
 (sim.genetics, still plain Python lists — crossover/mutation are rare

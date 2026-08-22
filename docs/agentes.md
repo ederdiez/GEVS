@@ -1,8 +1,8 @@
 # Los agentes: cerebro NN + cuerpo
 
 **La red propone, el cuerpo ejecuta.** Todo el comportamiento sale de una
-red neuronal (`sim/brain.py`, MLP en Python puro: 17 entradas → 8 neuronas
-ocultas relu → 8 salidas sigmoid). La red emite *intenciones*; un cuerpo
+red neuronal (`sim/brain.py`, MLP en Python puro: 18 entradas → 8 neuronas
+ocultas relu → 10 salidas sigmoid). La red emite *intenciones*; un cuerpo
 (`sim/agent.py`) garantiza lo inviolable: no pisar rocas, no ocupar una
 celda ajena, comer solo donde hay comida, no moverse mientras se descansa,
 buscar pareja cuando es el momento. Así la red puede ser torpe y la
@@ -25,7 +25,7 @@ de ellas convierten la madera en lanza in situ, sin que salga nunca del
 inventario) y `interact` sobre una lanza equipada no hace nada, porque su
 bonus de daño es pasivo (ver [Depredadores](#depredadores)).
 
-## Entradas de la red (17, normalizadas a [0,1])
+## Entradas de la red (18, normalizadas a [0,1])
 
 Calculadas cada frame en `Agent._inputs()`:
 
@@ -48,6 +48,7 @@ Calculadas cada frame en `Agent._inputs()`:
 | 14 | `animal_dir_y` | idem, eje Y |
 | 15 | `animal_close` | `1 - min(dist / ANIMAL_SENSE_RANGE, 1)`; 0 si no hay animal en rango |
 | 16 | `animal_danger` | 1.0 si el animal detectado es depredador, 0.0 si no o si no hay ninguno — verdad fundamental que da el mundo, no una inferencia del agente |
+| 17 | `agent_has_spear` | 1.0 si el otro agente más cercano (dentro de `AGENT_SENSE_RANGE`) lleva una lanza equipada en el inventario, 0.0 si no o si no hay ninguno en rango — verdad fundamental como `animal_danger`, reaccionar es aprendido |
 
 ## Capa oculta (8 neuronas relu: 6 detectores legibles + 2 plásticas)
 
@@ -77,7 +78,7 @@ neuronas ocultas plástico en vida (ver `LEARNABLE_HIDDEN` más abajo), y
 además de la mutación normal entre generaciones, es capacidad libre que
 cada agente puede aprender a usar durante su propia vida.
 
-## Salidas (8, sigmoid → [0,1])
+## Salidas (10, sigmoid → [0,1])
 
 | Salida       | Intención        | El cuerpo hace |
 |--------------|------------------|----------------|
@@ -87,7 +88,9 @@ cada agente puede aprender a usar durante su propia vida.
 | `grab`       | recoger          | si `grab > GRAB_OUTPUT_THRESHOLD` (0.4) y hay comida, madera o una lanza tirada bajo el agente → pasa a su inventario (una ranura); la celda se vacía (mismo timer de regrow que comer, si el tipo regenera) pero el objeto se lleva, no se consume. El cuerpo ignora `grab` si el inventario está lleno. |
 | `interact`   | usar lo llevado  | si `interact > INTERACT_OUTPUT_THRESHOLD` (0.4), hay algo en el inventario y el agente no está ya comiendo → dispatch por tipo de objeto; para comida, arranca el mismo `eat_timer` que comer del suelo y vacía el inventario; para madera, cuenta como una interacción de fabricación (`WOOD_CRAFT_INTERACTIONS` de ellas → lanza, ver arriba); para una lanza equipada, no hace nada. |
 | `drop`       | soltar lo llevado | si `drop > DROP_OUTPUT_THRESHOLD` (0.4), hay algo en el inventario y la celda del agente está vacía → dispatch por tipo de objeto; para comida, madera o lanza, la deja en el suelo (`world.place_cell`) y vacía el inventario. |
-| `attack`     | golpear un animal | si `attack > ATTACK_OUTPUT_THRESHOLD` (0.4) y el animal más cercano es un depredador a distancia ≤ 1 celda → le inflige `damage` (rasgo genético), multiplicado por `SPEAR_DAMAGE_MULT` si el agente lleva una lanza equipada (`inventory == CELL_SPEAR`); si el hp del animal llega a 0, muere. Ver [Depredadores](#depredadores). |
+| `attack`     | golpear el objetivo actual | si `attack > ATTACK_OUTPUT_THRESHOLD` (0.4) y el objetivo elegido por `target_animal`/`target_agent` está a distancia ≤ 1 celda → le inflige `damage` (rasgo genético), multiplicado por `SPEAR_DAMAGE_MULT` si el agente lleva una lanza equipada (`inventory == CELL_SPEAR`); si el hp de la víctima llega a 0, muere (`world.kill_animal`/`world.kill` según el tipo). Ver [Depredadores](#depredadores) y [Interacción entre agentes](#interacción-entre-agentes). |
+| `target_animal` | fijar como objetivo al animal más cercano | si supera `TARGET_ANIMAL_OUTPUT_THRESHOLD` (0.4), `attack` apunta al animal más cercano (`_animal_dir()`) en vez de a un agente |
+| `target_agent` | fijar como objetivo al agente más cercano | si supera `TARGET_AGENT_OUTPUT_THRESHOLD` (0.4), `attack` apunta al otro agente más cercano (`_other_agent()`) en vez de a un animal. Si ambas salidas superan su umbral, gana el valor crudo más alto (`agent.py`) |
 
 **Reflejo de supervivencia** (por debajo del cerebro, como en la biología):
 si `hunger > HUNGER_CRITICAL` (0.85), el agente ignora `rest` y sigue
@@ -340,7 +343,6 @@ El agente, por su parte, tiene dos rasgos genéticos nuevos: `hp` (escala
 `BASE_AGENT_HP`, vida real — a 0 el agente muere, mismo flujo diferido que
 el resto de muertes) y `damage` (escala `BASE_AGENT_DAMAGE`, lo que
 inflige su propia salida `attack`). Sensa animales con `_animal_dir()`
-(calcado de `_other_agent()`, pero devuelve el objeto para poder atacarlo)
 dentro de `ANIMAL_SENSE_RANGE`.
 
 **Nada de esto está cableado a mano en la respuesta del agente**: huir,
@@ -356,6 +358,27 @@ Densidad y presión ajustables en `config.py` `# --- Animals (predators)
 real. Los animales no se reproducen — `ANIMAL_RESPAWN_S` repone bajas
 cuando la cuenta cae por debajo de `ANIMAL_SPAWN_COUNT`.
 
+## Interacción entre agentes
+
+Los agentes también pueden atacarse entre sí: `attack` no distingue el
+tipo de víctima, solo a quién apunta (`target_animal`/`target_agent`, ver
+arriba). `_other_agent()` (calcado de `_animal_dir()`) devuelve el agente
+más cercano dentro de `AGENT_SENSE_RANGE`, no solo su dirección, para que
+`attack` pueda golpearlo igual que a un animal — mismo `damage`, mismo
+bonus de lanza (`SPEAR_DAMAGE_MULT`), mismo `ATTACK_COOLDOWN_S`. Si el hp
+de la víctima llega a 0 muere por `world.kill()`, el mismo flujo diferido
+que cualquier otra muerte (no suelta carne: eso solo pasa al matar un
+animal, ver [sistema de carne](#depredadores)).
+
+`Agent.take_damage()` no distingue si el golpe vino de un animal o de otro
+agente, así que `PENALTY_ANIMAL_DAMAGE_K` moldea la respuesta a ambas
+amenazas por igual. El input `agent_has_spear` (17) da al agente verdad
+fundamental sobre si el más cercano va armado; junto con las columnas de
+dirección/cercanía del otro agente, es plástico en vida en
+`move_x`/`move_y`/`attack`/`target_agent` (`_OTHER_SKIP_COLS` en
+`config.py`) — evitar, ignorar o cazar a un agente armado es aprendido,
+no cableado.
+
 ## El inspector (`sim/inspector.py`)
 
 Clic izquierdo sobre un agente en la ventana principal (radio de selección
@@ -365,12 +388,13 @@ multi-ventana de pygame 2 / SDL2, `loop.py` la crea con
 `create_inspector_window()`) dibuja en vivo, tick a tick:
 
 - barras de `hunger`/`energy`/`hp`, generación, edad y estado;
-- el grafo completo de la red — 17 entradas, 8 ocultas, 8 salidas,
+- el grafo completo de la red — 18 entradas, 8 ocultas, 10 salidas,
   coloreado por activación: el inspector lee `Brain._last_hidden`/
   `_last_outputs`, que `forward()` ya guarda cada tick, en vez de volver
   a calcular nada — así abrir el inspector no acelera el aprendizaje
   (ni la traza de elegibilidad) del agente inspeccionado;
-- los seis umbrales de salida (`eat`/`rest`/`grab`/`interact`/`drop`/`attack`)
+- los ocho umbrales de salida
+  (`eat`/`rest`/`grab`/`interact`/`drop`/`attack`/`target_animal`/`target_agent`)
   junto a su valor crudo.
 
 Si el agente seleccionado muere, la selección se limpia sola. La ventana
@@ -398,8 +422,8 @@ es redimensionable; `loop.py` reescala la superficie offscreen en
   hebbiano difuso.
 - **Hacer plástica solo una columna, no la fila entera** → añadir el par
   `(fila, columna)` a `LEARNABLE_CELLS` en vez de la fila completa a
-  `LEARNABLE_OUTPUTS` (así lo hacen las 4 señales de animal en
-  `move_x`/`move_y`/`attack`).
+  `LEARNABLE_OUTPUTS` (así lo hacen las 4 señales de animal y las 4 de
+  otro-agente/lanza en `move_x`/`move_y`/`attack`/`target_animal`/`target_agent`).
 - **Afinar cuánto exploran** → el peso de la columna `noise` (12) en las
   filas `grab`/`interact`/`drop` de `BRAIN_W_OUT`, y sus biases: juntos
   fijan la tasa de disparo de cada fila (la aritmética está en el comentario
