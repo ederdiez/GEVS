@@ -69,7 +69,7 @@ COLOR_HUD_TEXT = (235, 238, 245)
 # --- Agents ---
 # Needs and body rates, calibrated for DAY_LENGTH_S = 60 real seconds per
 # simulated day (a full hunger/energy cycle is visible in ~2 minutes).
-AGENT_COUNT = 14           # agents spawned by the world
+AGENT_COUNT = 30          # agents spawned by the world
 AGENT_SPEED = 6.0          # cells per second
 AGENT_STEP_S = 0.1         # max movement sub-step (s); AGENT_SPEED * AGENT_STEP_S < 1 cell
 AGENT_RADIUS = 7           # px, draw radius
@@ -455,7 +455,7 @@ PENALTY_ANIMAL_DAMAGE_K = -3.0  # x (hp perdido / hp_max) este tick
 
 # --- Death and population ---
 MAX_AGE_S = 300.0             # s; death by old age (5 simulated days)
-MAX_POPULATION = 60           # safety cap on the living population
+MAX_POPULATION = 120           # safety cap on the living population
 
 # --- Reproduction ---
 MATE_ENERGY_THRESHOLD = 0.60  # min energy to be eligible to mate
@@ -470,10 +470,10 @@ CHILD_INITIAL_ENERGY = 0.80   # the child's starting energy
 # docs/arquitectura.md "Cómo añadir algo nuevo". Only one type exists
 # today, so a flat flag is enough; a type registry is for when a second
 # type is real.
-ANIMAL_SENSE_RANGE = 4.0   # cells; how far an agent can sense an animal (brain inputs)
-ANIMAL_DETECT_RANGE = 4.0  # cells; how far an animal can sense an agent to chase
+ANIMAL_SENSE_RANGE = 8.0   # cells; how far an agent can sense an animal (brain inputs)
+ANIMAL_DETECT_RANGE = 9.0  # cells; how far an animal can sense an agent to chase
 ANIMAL_HP = 40.0
-ANIMAL_DAMAGE = 4.0        # low on purpose: with zero hand-tuned flee/attack instinct
+ANIMAL_DAMAGE = 5.0        # low on purpose: with zero hand-tuned flee/attack instinct
                            # (LEARNABLE_CELLS), the first generations survive purely on
                            # luck + noise-driven wander until reward shapes a response —
                            # a low bite means many encounters instead of a handful of kills
