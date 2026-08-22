@@ -23,7 +23,7 @@ from sim.animal import Animal
 # Cell types agents can walk onto and pick up. Only food regrows on its
 # own; wood regrows too (see _REGROW_S) but a spear never does — it only
 # ever appears via crafting or a drop.
-_COLLECTIBLE = (cfg.CELL_RESOURCE, cfg.CELL_WOOD, cfg.CELL_SPEAR)
+_COLLECTIBLE = (cfg.CELL_RESOURCE, cfg.CELL_WOOD, cfg.CELL_SPEAR, cfg.CELL_MEAT)
 _REGROW_S = {cfg.CELL_RESOURCE: cfg.RESOURCE_REGROW_S, cfg.CELL_WOOD: cfg.WOOD_REGROW_S}
 
 
@@ -139,11 +139,18 @@ class World:
 
     def kill_animal(self, animal) -> None:
         """Mark an animal for removal; materializes in end_frame(). Mirrors
-        kill(), minus the `occupied` release (animals never claim a cell)."""
+        kill(), minus the `occupied` release (animals never claim a cell).
+        Drops meat on the animal's cell if it's empty (never regrows, like
+        a spear — see _REGROW_S). Set directly on the grid, not via
+        place_cell, so it isn't marked "dropped": it's a found resource,
+        not an agent's own drop, so grabbing it still earns REWARD_GRAB."""
         if not animal.alive:
             return
         animal.alive = False
         self.pending_animal_deaths.append(animal)
+        x, y = self.wrap(animal.cx, animal.cy)
+        if self.grid[y][x] == cfg.CELL_EMPTY:
+            self.grid[y][x] = cfg.CELL_MEAT
 
     # -- simulation clock --
 

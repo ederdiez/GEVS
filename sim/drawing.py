@@ -26,6 +26,7 @@ _CELL_COLORS = {
     cfg.CELL_ROCK: cfg.COLOR_CELL_ROCK,
     cfg.CELL_WOOD: cfg.COLOR_CELL_WOOD,
     cfg.CELL_SPEAR: cfg.COLOR_CELL_SPEAR,
+    cfg.CELL_MEAT: cfg.COLOR_CELL_MEAT,
 }
 
 

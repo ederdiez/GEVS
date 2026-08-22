@@ -39,6 +39,7 @@ CELL_RESOURCE = 2             # food (green)
 CELL_ROCK = 3                 # rock: collidable (future functionality pending)
 CELL_WOOD = 4                 # wood: walkable and collectible, like food (see WOOD_CRAFT_INTERACTIONS)
 CELL_SPEAR = 5                 # spear: never generated procedurally or regrown, only crafted from wood or dropped
+CELL_MEAT = 6                  # meat: never generated procedurally or regrown, only dropped by a killed animal
 
 # --- Procedural generation (densities 0.0-1.0) ---
 ROCK_DENSITY = 0.08
@@ -52,6 +53,7 @@ COLOR_CELL_ROCK = (116, 106, 96)     # rock (gray-brown)
 COLOR_CELL_WOOD = (139, 101, 54)     # wood (brown)
 COLOR_CELL_RESOURCE = (48, 148, 96)  # food (green)
 COLOR_CELL_SPEAR = (200, 180, 140)   # spear (light shaft, distinct from raw wood)
+COLOR_CELL_MEAT = (176, 60, 60)      # meat (red)
 
 # --- Day/night cycle (simulated hours) ---
 DAY_LENGTH_S = 60.0          # real seconds per simulated day (1 h = 2.5 real s)
@@ -485,7 +487,7 @@ ANIMAL_DAMAGE = 5.0        # low on purpose: with zero hand-tuned flee/attack in
 ANIMAL_SPEED = 3.0          # cells/s; well under AGENT_SPEED so undirected wander alone
                              # has real odds of drifting out of ANIMAL_DETECT_RANGE
 ANIMAL_IS_PREDATOR = True
-ANIMAL_SPAWN_COUNT = 2
+ANIMAL_SPAWN_COUNT = 10
 ANIMAL_RESPAWN_S = 30.0     # s between respawns while population is below ANIMAL_SPAWN_COUNT (animals don't breed)
 COLOR_ANIMAL = (180, 40, 40)
 ANIMAL_RADIUS = 7           # px, draw radius

@@ -107,6 +107,19 @@ def _drop_resource(agent) -> bool:
     return True
 
 
+def _drop_meat(agent) -> bool:
+    """Mirrors _drop_resource: drop the carried meat onto an empty cell
+    under the agent."""
+    if agent._carry_time < cfg.CARRY_MIN_S:
+        return False
+    if agent.world.cell_type(agent.cx, agent.cy) != cfg.CELL_EMPTY:
+        return False
+    agent.world.place_cell(agent.cx, agent.cy, cfg.CELL_MEAT)
+    agent.inventory = None
+    agent._carry_time = 0.0
+    return True
+
+
 def _interact_wood(agent) -> bool:
     """Work the carried wood toward a spear: WOOD_CRAFT_INTERACTIONS valid
     interactions turn it into a spear in place. The wood never actually
@@ -159,11 +172,14 @@ def _drop_spear(agent) -> bool:
 # the item left the inventory — so the dispatch in Agent.update() never
 # special-cases food: adding a new carryable item only means adding one
 # entry here. Wood and a crafted spear are the first real use of that
-# extension point.
+# extension point. Meat reuses _interact_resource: eating it from the
+# inventory is identical to eating carried food, it just came from a
+# killed animal instead of the ground.
 _INVENTORY_ACTIONS = {
     cfg.CELL_RESOURCE: (_interact_resource, _drop_resource),
     cfg.CELL_WOOD: (_interact_wood, _drop_wood),
     cfg.CELL_SPEAR: (_interact_spear, _drop_spear),
+    cfg.CELL_MEAT: (_interact_resource, _drop_meat),
 }
 
 
@@ -467,7 +483,7 @@ class Agent:
         # skipped while already eating, so it can't restart the eat_timer
         # mid-meal.
         dropped = False
-        was_food = self.inventory == cfg.CELL_RESOURCE
+        was_food = self.inventory in (cfg.CELL_RESOURCE, cfg.CELL_MEAT)
         if self.inventory is not None:
             interact_fn, drop_fn = _INVENTORY_ACTIONS[self.inventory]
             if self.interact_out > cfg.INTERACT_OUTPUT_THRESHOLD and self.eat_timer <= 0:
@@ -482,7 +498,7 @@ class Agent:
             self.eat_timer -= dt
             self.hunger = max(0.0, self.hunger - self.eat_rate * dt)
         elif self.eat_out > cfg.EAT_OUTPUT_THRESHOLD and \
-                self.world.cell_type(self.cx, self.cy) == cfg.CELL_RESOURCE:
+                self.world.cell_type(self.cx, self.cy) in (cfg.CELL_RESOURCE, cfg.CELL_MEAT):
             self.world.consume_cell(self.cx, self.cy)
             self.eat_timer = cfg.EAT_DURATION_S
             self._meal_from_inventory = False
@@ -600,7 +616,7 @@ class Agent:
         #    carrying wood/a spear (which can't be eaten) never pays it, and
         #    the agent still on its way to food — the case that broke that
         #    attempt — never pays it either.
-        if self.inventory == cfg.CELL_RESOURCE and self.hunger > cfg.HUNGER_CRITICAL:
+        if self.inventory in (cfg.CELL_RESOURCE, cfg.CELL_MEAT) and self.hunger > cfg.HUNGER_CRITICAL:
             reward += cfg.PENALTY_STARVING_WITH_FOOD * dt
         # 5. Damage taken from a predator this tick, relative to hp_max so
         #    the `hp` trait doesn't rescale the reward (see config.py).
@@ -776,6 +792,21 @@ def _selfcheck() -> None:
     damage_bare = agent.damage
     damage_speared = agent.damage * cfg.SPEAR_DAMAGE_MULT
     assert damage_speared > damage_bare
+
+    # killing an animal drops meat on its cell; it can be grabbed, carried
+    # (dropping and re-grabbing it), and eaten from the inventory.
+    animal = world.animals[0]
+    world.grid[animal.cy][animal.cx] = cfg.CELL_EMPTY
+    world.kill_animal(animal)
+    assert world.grid[animal.cy][animal.cx] == cfg.CELL_MEAT
+    assert not world.is_dropped(animal.cx, animal.cy)  # a found resource, not a self-drop
+
+    agent.inventory = cfg.CELL_MEAT
+    agent._carry_time = cfg.CARRY_MIN_S
+    agent.hunger = 0.5
+    _interact_resource(agent)
+    assert agent.inventory is None
+    assert agent.eat_timer > 0.0
 
     print("agent self-check OK")
 
