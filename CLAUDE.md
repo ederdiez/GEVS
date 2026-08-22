@@ -35,8 +35,8 @@ ventana y arranca `loop.run()`. Módulos, por responsabilidad única:
 | --- | --- |
 | `sim/config.py` | **Toda** constante editable: tamaño, FPS, colores, densidades, ritmos, umbrales, y las matrices de pesos afinadas a mano de la red. Nada de números mágicos en el resto del código. |
 | `sim/world.py` | Lógica pura del mundo (sin pygame, testeable headless): grid toroidal, reloj día/noche, comida, claims de celda, nacimientos/muertes diferidos. |
-| `sim/agent.py` | El cuerpo del agente: ejecuta las intenciones del cerebro garantizando lo inviolable (no atravesar rocas, no pisar una claim ajena, comer solo con comida debajo...). Construye las 11 entradas de la red en `_inputs()`. |
-| `sim/brain.py` | MLP en Python puro (11→6→7) + aprendizaje Hebbiano personal (`learn()`, traza de elegibilidad, no heredable). |
+| `sim/agent.py` | El cuerpo del agente: ejecuta las intenciones del cerebro garantizando lo inviolable (no atravesar rocas, no pisar una claim ajena, comer solo con comida debajo...). Construye las 17 entradas de la red en `_inputs()`. |
+| `sim/brain.py` | MLP vectorizado con numpy (17→6→8) + aprendizaje Hebbiano personal (`learn()`, traza de elegibilidad, no heredable). Las matrices de pesos siguen viviendo como listas legibles en `config.py`/`genetics.py`; solo `Brain` las convierte a arrays. |
 | `sim/genetics.py` | El genoma (pesos + 6 rasgos hereditarios): crossover, mutación, clon. Única unidad de herencia. |
 | `sim/drawing.py` | Una función de dibujo por capa/elemento, llamadas en orden fijo desde `loop.py`. |
 | `sim/inspector.py` | Segunda ventana OS: red neuronal en vivo del agente seleccionado. |
@@ -56,10 +56,17 @@ las matrices de `config.py`), ejecución/validación en el cuerpo.
 
 **Determinismo:** todo el azar (spawn, ruido inicial del genoma,
 crossover, mutación, ruido de la red) sale de `world.rng`, sembrado por
-`WORLD_SEED`. Misma semilla → misma trayectoria evolutiva byte a byte;
-ambos tests headless lo verifican pisando dos mundos lado a lado. Al
-tocar cualquier cosa que use aleatoriedad, usa siempre `world.rng`, nunca
-`random` global.
+`WORLD_SEED`. Misma semilla → misma trayectoria evolutiva reproducible
+(no hay tests automatizados que la fijen byte a byte hoy — se verifica
+lanzando la simulación y observando). Al tocar cualquier cosa que use
+aleatoriedad, usa siempre `world.rng`, nunca `random` global. Nota: las
+búsquedas de vecino más cercano en `agent.py` (comida, otros agentes,
+pareja) usan una ventana acotada por rango de percepción en vez de
+recorrer todas las entidades — más rápido con poblaciones/mundos
+grandes, pero el orden de desempate entre candidatos equidistantes ya
+no es "orden de la lista `entities`", así que dos semillas iguales
+comparadas contra versiones antiguas del código no producirán la misma
+trayectoria exacta (siguen siendo deterministas consigo mismas).
 
 **Mundo toroidal:** el grid no tiene borde — toda consulta de celda o
 movimiento pasa por `World.wrap(x, y)` (`x % cols, y % rows`). Al añadir

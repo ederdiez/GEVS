@@ -1,4 +1,4 @@
-"""Brain: a small multilayer perceptron, pure Python (no dependencies).
+"""Brain: a small multilayer perceptron, vectorized with numpy.
 
 The MLP is the agent's brain: it receives 17 signals and emits 8
 intentions (move_x, move_y, eat, rest, grab, interact, drop, attack). All weights
@@ -7,29 +7,26 @@ the forward pass. See config.py `# --- Brain ---` for the meaning of
 every unit and every weight.
 
 Each agent builds its own Brain from its Genome's weight tables
-(sim.genetics); the Brain deep-copies them, so it owns independent
-weights from birth. forward() also updates a reward-modulated Hebbian
-eligibility trace, and learn(reward) uses that trace to nudge the
-Brain's own weights — this is the agent's *personal* learning, kept
-apart from the Genome, which is the only thing crossover/mutation ever
-touch. See config.py `# --- Reinforcement learning ---`.
+(sim.genetics, still plain Python lists — crossover/mutation are rare
+events compared to forward()/learn(), so vectorizing them buys nothing);
+the Brain converts them to numpy arrays it owns independently, so it can
+learn() without ever touching the Genome or another Brain. forward() also
+updates a reward-modulated Hebbian eligibility trace, and learn(reward)
+uses that trace to nudge the Brain's own weights — this is the agent's
+*personal* learning, kept apart from the Genome, which is the only thing
+crossover/mutation ever touch. See config.py `# --- Reinforcement
+learning ---`.
 """
 
 import math
 
+import numpy as np
+
 from sim import config as cfg
 
 
-def _relu(v: float) -> float:
-    return max(0.0, v)
-
-
-def _sigmoid(v: float) -> float:
-    return 1.0 / (1.0 + math.exp(-v))
-
-
-def _clamp(w: float) -> float:
-    return max(-cfg.WEIGHT_CLAMP, min(cfg.WEIGHT_CLAMP, w))
+def _clamp(w):
+    return np.clip(w, -cfg.WEIGHT_CLAMP, cfg.WEIGHT_CLAMP)
 
 
 class Brain:
@@ -50,18 +47,19 @@ class Brain:
     """
 
     def __init__(self, w_hidden, b_hidden, w_out, b_out):
-        # Deep-copy: a Brain owns independent tables so learn() can mutate
-        # them without ever touching the Genome's (or another Brain's) data.
-        self.w_hidden = [list(row) for row in w_hidden]
-        self.b_hidden = list(b_hidden)
-        self.w_out = [list(row) for row in w_out]
-        self.b_out = list(b_out)
+        # np.asarray on a list copies by default: a Brain owns independent
+        # tables so learn() can mutate them without ever touching the
+        # Genome's (or another Brain's) data.
+        self.w_hidden = np.asarray(w_hidden, dtype=np.float64)
+        self.b_hidden = np.asarray(b_hidden, dtype=np.float64)
+        self.w_out = np.asarray(w_out, dtype=np.float64)
+        self.b_out = np.asarray(b_out, dtype=np.float64)
 
         # Traces exist for the output layer only: the hidden layer never
         # learns in-life (see learn()), so a hidden trace would be work the
         # hot path does every tick and nothing ever reads.
-        self._elig_w_out = [[0.0] * len(row) for row in self.w_out]
-        self._elig_b_out = [0.0] * len(self.b_out)
+        self._elig_w_out = np.zeros_like(self.w_out)
+        self._elig_b_out = np.zeros_like(self.b_out)
 
         # Running baseline: what each output usually does. The trace credits
         # the DEVIATION from this, not the raw activation (see
@@ -70,24 +68,26 @@ class Brain:
         # seconds unlearning an arbitrary starting guess.
         self._avg_out = None
 
+        # Last forward() results, kept for the inspector (sim.inspector) so
+        # it can read this tick's activations instead of recomputing them.
+        self._last_hidden = None
+        self._last_outputs = None
+
     def forward(self, inputs, dt: float) -> list:
         """inputs: list of floats, one per brain input (see config).
 
         dt (real seconds this tick) only drives the eligibility decay —
         the forward pass itself is stateless.
         """
-        hidden = [
-            _relu(b + sum(w * x for w, x in zip(row, inputs)))
-            for row, b in zip(self.w_hidden, self.b_hidden)
-        ]
+        x = np.asarray(inputs, dtype=np.float64)
+        hidden = np.maximum(0.0, self.w_hidden @ x + self.b_hidden)
         # Output layer input: hidden activations + raw inputs (skip connections).
-        layer_in = hidden + list(inputs)
-        outputs = [
-            _sigmoid(b + sum(w * x for w, x in zip(row, layer_in)))
-            for row, b in zip(self.w_out, self.b_out)
-        ]
+        layer_in = np.concatenate((hidden, x))
+        outputs = 1.0 / (1.0 + np.exp(-(self.w_out @ layer_in + self.b_out)))
         self._update_eligibility(outputs, layer_in, dt)
-        return outputs
+        self._last_hidden = hidden
+        self._last_outputs = outputs
+        return outputs.tolist()
 
     def _update_eligibility(self, outputs, layer_in, dt) -> None:
         """Blend this tick's pre*deviation correlation into every trace.
@@ -118,29 +118,26 @@ class Brain:
           exactly what the noise input causes — is held responsible.
 
         Only called from forward() (the hot path Agent.update drives) —
-        forward_debug() must stay side-effect-free, or opening the
-        inspector on an agent would speed up its learning.
+        opening the inspector on an agent must never call this a second
+        time, or it would speed up that agent's learning (see
+        sim.inspector, which reads Brain._last_hidden/_last_outputs
+        instead of recomputing).
         """
         if self._avg_out is None:
-            self._avg_out = list(outputs)
-        d_out = [o - a for o, a in zip(outputs, self._avg_out)]
+            self._avg_out = outputs.copy()
+        d_out = outputs - self._avg_out
 
         decay = math.exp(-dt / cfg.ELIGIBILITY_TAU_S)
         keep = 1.0 - decay
-        self._elig_w_out = [
-            [decay * e + keep * d * x for e, x in zip(erow, layer_in)]
-            for erow, d in zip(self._elig_w_out, d_out)
-        ]
-        self._elig_b_out = [decay * e + keep * d
-                            for e, d in zip(self._elig_b_out, d_out)]
+        self._elig_w_out = decay * self._elig_w_out + keep * np.outer(d_out, layer_in)
+        self._elig_b_out = decay * self._elig_b_out + keep * d_out
 
         # The baseline moves on its own, slower clock: fast enough to follow
         # a real change of regime, slow enough that a burst still reads as a
         # deviation instead of instantly becoming "normal".
         b_decay = math.exp(-dt / cfg.BASELINE_TAU_S)
         b_keep = 1.0 - b_decay
-        self._avg_out = [b_decay * a + b_keep * o
-                         for a, o in zip(self._avg_out, outputs)]
+        self._avg_out = b_decay * self._avg_out + b_keep * outputs
 
     def learn(self, reward: float) -> None:
         """Reward-modulated Hebbian update: w += LEARNING_RATE * reward * eligibility.
@@ -173,28 +170,10 @@ class Brain:
             return
         lr = cfg.LEARNING_RATE
         for i in cfg.LEARNABLE_OUTPUTS:
-            self.w_out[i] = [_clamp(w + lr * reward * e)
-                             for w, e in zip(self.w_out[i], self._elig_w_out[i])]
+            self.w_out[i] = _clamp(self.w_out[i] + lr * reward * self._elig_w_out[i])
             self.b_out[i] = _clamp(self.b_out[i] + lr * reward * self._elig_b_out[i])
         for row, col in cfg.LEARNABLE_CELLS:
             if row in cfg.LEARNABLE_OUTPUTS:
                 continue  # already updated above, avoid double-applying
-            self.w_out[row][col] = _clamp(
-                self.w_out[row][col] + lr * reward * self._elig_w_out[row][col])
-
-    def forward_debug(self, inputs) -> tuple:
-        """Like forward(), but also returns the hidden activations.
-
-        For inspection only (sim.inspector): every agent's hot path keeps
-        calling forward(), which stays untouched.
-        """
-        hidden = [
-            _relu(b + sum(w * x for w, x in zip(row, inputs)))
-            for row, b in zip(self.w_hidden, self.b_hidden)
-        ]
-        layer_in = hidden + list(inputs)
-        outputs = [
-            _sigmoid(b + sum(w * x for w, x in zip(row, layer_in)))
-            for row, b in zip(self.w_out, self.b_out)
-        ]
-        return hidden, outputs
+            self.w_out[row, col] = _clamp(
+                self.w_out[row, col] + lr * reward * self._elig_w_out[row, col])

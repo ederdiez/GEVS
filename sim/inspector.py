@@ -93,10 +93,15 @@ def _node_color(value):
     return lerp_color(cfg.COLOR_NODE_LOW, cfg.COLOR_NODE_HIGH, value)
 
 
+_edge_cache_key = None
+_edge_cache_surf = None
+
+
 def _draw_network(surface, top, height, inputs, hidden, outputs):
     """Three columns of nodes (inputs / hidden / outputs), connected by
     lines, colored by activation value."""
-    width = surface.get_width()
+    global _edge_cache_key, _edge_cache_surf
+    width, full_height = surface.get_size()
     cols = [
         (list(zip(INPUT_LABELS, inputs)), width * 0.18),
         (list(zip(HIDDEN_LABELS, hidden)), width * 0.52),
@@ -110,11 +115,19 @@ def _draw_network(surface, top, height, inputs, hidden, outputs):
         col_positions = [(cx, top + gap * (i + 1)) for i in range(n)]
         positions.append(col_positions)
 
-    # Edges: every node in a column connects to every node in the next.
-    for col_a, col_b in zip(positions[:-1], positions[1:]):
-        for pa in col_a:
-            for pb in col_b:
-                pygame.draw.line(surface, cfg.COLOR_EDGE, pa, pb, 1)
+    # Edges never depend on activations, only on the (fixed) topology and
+    # the panel's layout — pre-render them once per layout instead of 150
+    # pygame.draw.line calls every frame, and blit the cached surface.
+    key = (width, full_height, top, height)
+    if key != _edge_cache_key:
+        edge_surf = pygame.Surface((width, full_height), pygame.SRCALPHA)
+        for col_a, col_b in zip(positions[:-1], positions[1:]):
+            for pa in col_a:
+                for pb in col_b:
+                    pygame.draw.line(edge_surf, cfg.COLOR_EDGE, pa, pb, 1)
+        _edge_cache_surf = edge_surf
+        _edge_cache_key = key
+    surface.blit(_edge_cache_surf, (0, 0))
 
     for (nodes, _), col_positions in zip(cols, positions):
         for (label, value), (x, y) in zip(nodes, col_positions):
@@ -153,8 +166,14 @@ def draw_inspector(surface, agent) -> None:
     _draw_bar(surface, x, y, 160, 12, agent.hp / agent.hp_max, cfg.COLOR_ANIMAL, "hp")
     y += 34
 
-    inputs = agent._inputs()
-    hidden, outputs = agent.brain.forward_debug(inputs)
+    # Reuse this tick's already-computed forward pass (Agent.update already
+    # ran it) instead of recomputing: agent._inputs() draws from world.rng
+    # (the "noise" input), so calling it again here would burn extra random
+    # numbers and shift the simulation's trajectory just by having a window
+    # open.
+    inputs = agent._last_inputs
+    hidden = agent.brain._last_hidden.tolist()
+    outputs = agent.brain._last_outputs.tolist()
 
     net_top = y + 10
     net_height = surface.get_height() - net_top - 90

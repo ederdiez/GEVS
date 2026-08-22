@@ -140,6 +140,9 @@ def _get_font():
     return _font
 
 
+_hud_line_cache = {}  # line index -> (text, shadow_surf, shadow_rect, label_surf, label_rect)
+
+
 def draw_hud(screen: pygame.Surface, world, speed: int = 1) -> None:
     """Draw the time-of-day HUD, population and speed multiplier; call
     last so the night overlay never dims it."""
@@ -153,9 +156,16 @@ def draw_hud(screen: pygame.Surface, world, speed: int = 1) -> None:
              f"†{world.stats_deaths}  +{world.stats_births}"]
     if speed != 1:
         lines.append(f"Velocidad: x{speed}")
-    for offset, text in enumerate(lines):
-        offset *= 22
-        shadow, s_rect = font.render(text, (0, 0, 0))
+    for i, text in enumerate(lines):
+        offset = i * 22
+        cached = _hud_line_cache.get(i)
+        # Most frames repeat the previous minute/population/speed, so this
+        # skips re-rendering (font.render, twice per line) on those frames.
+        if cached is None or cached[0] != text:
+            shadow, s_rect = font.render(text, (0, 0, 0))
+            label, l_rect = font.render(text, cfg.COLOR_HUD_TEXT)
+            cached = (text, shadow, s_rect, label, l_rect)
+            _hud_line_cache[i] = cached
+        _, shadow, s_rect, label, l_rect = cached
         screen.blit(shadow, (x + s_rect.x + 1, y + offset + s_rect.y + 1))
-        label, l_rect = font.render(text, cfg.COLOR_HUD_TEXT)
         screen.blit(label, (x + l_rect.x, y + offset + l_rect.y))

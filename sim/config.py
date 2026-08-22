@@ -69,7 +69,7 @@ COLOR_HUD_TEXT = (235, 238, 245)
 # --- Agents ---
 # Needs and body rates, calibrated for DAY_LENGTH_S = 60 real seconds per
 # simulated day (a full hunger/energy cycle is visible in ~2 minutes).
-AGENT_COUNT = 30          # agents spawned by the world
+AGENT_COUNT = 60         # agents spawned by the world
 AGENT_SPEED = 6.0          # cells per second
 AGENT_STEP_S = 0.1         # max movement sub-step (s); AGENT_SPEED * AGENT_STEP_S < 1 cell
 AGENT_RADIUS = 7           # px, draw radius

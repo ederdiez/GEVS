@@ -15,6 +15,47 @@ from sim import config as cfg
 from sim.genetics import Genome
 
 
+def _nearest_in_window(world, cx, cy, radius, index, accept=None):
+    """Nearest match to (cx, cy) within `radius` (Manhattan), searching only
+    the (2r+1)x(2r+1) window around it instead of every entry in `index` —
+    turns a per-agent O(entities)/O(food_cells) scan into O(radius^2),
+    independent of population or world size.
+
+    `index` is a set of (x, y) positions (e.g. world.food_cells) or a dict
+    keyed by (x, y) (e.g. world.occupied); every cell is wrapped through
+    world.wrap, so the search respects the toroidal map. `accept(x, y,
+    value)` may reject a candidate — value is index[(x, y)] for a dict
+    index, else None.
+
+    Ties (equal distance) break by ascending (dy, dx) — a fixed, arbitrary
+    but deterministic order, not the same as the entities list order the
+    old linear scan used.
+
+    Returns (dx, dy, dist, value) or None.
+    """
+    r = int(math.ceil(radius))
+    is_dict = isinstance(index, dict)
+    best = None
+    for dy in range(-r, r + 1):
+        for dx in range(-r, r + 1):
+            dist = abs(dx) + abs(dy)
+            if dist > radius or (best is not None and dist >= best[2]):
+                continue
+            x, y = world.wrap(cx + dx, cy + dy)
+            if is_dict:
+                value = index.get((x, y))
+                if value is None:
+                    continue
+            else:
+                if (x, y) not in index:
+                    continue
+                value = None
+            if accept is not None and not accept(x, y, value):
+                continue
+            best = (dx, dy, dist, value)
+    return best
+
+
 def _sleep_recovery_rate(t: float) -> float:
     """Energy recovered per second at *t* seconds continuously asleep.
 
@@ -133,6 +174,7 @@ class Agent:
         self.inventory = None
         self._carry_time = 0.0     # s the current inventory item has been held
         self._meal_from_inventory = False  # did the meal being chewed come from the slot?
+        self._last_inputs = None   # this tick's brain inputs, kept for the inspector
 
         # Per-axis sticky hold: axis -> [sign, timer]. While a cell is
         # blocked by another agent, the position freezes on that axis and
@@ -209,17 +251,15 @@ class Agent:
         instead of piling up next to it in a polite hold. The agent's own
         claim is kept, so standing on food still counts as eating it.
         """
-        best = None
-        for fx, fy in self.world.food_cells:
-            owner = self.world.occupied.get((fx, fy))
-            if owner is not None and owner is not self:
-                continue
-            dist = abs(fx - self.cx) + abs(fy - self.cy)
-            if dist > self.food_sense_range:
-                continue
-            if best is None or dist < best[2]:
-                best = (fx - self.cx, fy - self.cy, dist)
-        return best if best is not None else (None, None, None)
+        best = _nearest_in_window(
+            self.world, self.cx, self.cy, self.food_sense_range,
+            self.world.food_cells,
+            accept=lambda x, y, _v: self.world.occupied.get((x, y)) in (None, self),
+        )
+        if best is None:
+            return (None, None, None)
+        dx, dy, dist, _value = best
+        return (dx, dy, dist)
 
     def _other_agent(self):
         """Nearest other agent by Manhattan; (dx, dy, dist) or (None, None, None).
@@ -228,16 +268,15 @@ class Agent:
         so determinism is preserved. Only senses within AGENT_SENSE_RANGE —
         "personal space" — so the avoidance signal engages near contact only.
         """
-        best = None
-        for other in self.world.entities:
-            if other is self:
-                continue
-            dist = abs(other.cx - self.cx) + abs(other.cy - self.cy)
-            if dist > cfg.AGENT_SENSE_RANGE:
-                continue
-            if best is None or dist < best[2]:
-                best = (other.cx - self.cx, other.cy - self.cy, dist)
-        return best if best is not None else (None, None, None)
+        best = _nearest_in_window(
+            self.world, self.cx, self.cy, cfg.AGENT_SENSE_RANGE,
+            self.world.occupied,
+            accept=lambda x, y, other: other is not self,
+        )
+        if best is None:
+            return (None, None, None)
+        dx, dy, dist, _other = best
+        return (dx, dy, dist)
 
     def _animal_dir(self):
         """Nearest animal by Manhattan; (animal, dx, dy, dist) or
@@ -247,6 +286,12 @@ class Agent:
         the delta) — the attack action needs to know who to hit, the same
         reason `_mate_dir` returns the partner. Only senses within
         ANIMAL_SENSE_RANGE.
+
+        # ponytail: linear scan over world.animals, not a window scan like
+        # _food_dir/_other_agent/_mate_dir. ANIMAL_SPAWN_COUNT is tiny (a
+        # handful), so a window scan (dozens of cell lookups) would cost
+        # more than just checking every animal directly. Switch to a window
+        # if the animal population ever grows to matter.
         """
         best = None
         for animal in self.world.animals:
@@ -285,16 +330,15 @@ class Agent:
         randomness, so determinism is preserved. Filters on
         other._mate_eligible().
         """
-        best = None
-        for other in self.world.entities:
-            if other is self or not other._mate_eligible():
-                continue
-            dist = abs(other.cx - self.cx) + abs(other.cy - self.cy)
-            if dist > cfg.MATE_RANGE:
-                continue
-            if best is None or dist < best[2]:
-                best = (other, other.cx - self.cx, other.cy - self.cy, dist)
-        return best if best is not None else (None, None, None, None)
+        best = _nearest_in_window(
+            self.world, self.cx, self.cy, cfg.MATE_RANGE,
+            self.world.occupied,
+            accept=lambda x, y, other: other is not self and other._mate_eligible(),
+        )
+        if best is None:
+            return (None, None, None, None)
+        dx, dy, dist, other = best
+        return (other, dx, dy, dist)
 
     # -- body --
 
@@ -307,8 +351,9 @@ class Agent:
         # need actually satisfied, not the action taken (see config.py
         # `# --- Reinforcement learning ---`).
         hunger_before = self.hunger
+        self._last_inputs = self._inputs()
         (self.move_x, self.move_y, self.eat_out, self.rest_out, self.grab_out,
-         self.interact_out, self.drop_out, self.attack_out) = self.brain.forward(self._inputs(), dt)
+         self.interact_out, self.drop_out, self.attack_out) = self.brain.forward(self._last_inputs, dt)
 
         # Attack: strike the nearest animal if it's a predator within reach.
         # No instinct or reward for landing a hit (config.py) — only the

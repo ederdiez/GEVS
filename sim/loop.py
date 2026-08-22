@@ -44,6 +44,10 @@ def run(screen: pygame.Surface) -> None:
     running = True
     selected_agent = None
     inspector = create_inspector_window()
+    # The inspector's empty state ("click a creature") never changes frame
+    # to frame, unlike a live selection (whose age/needs/outputs move every
+    # tick) — draw it once, not every frame, until the selection changes.
+    inspector_empty_drawn = False
     speed_index = 0  # index into config.SPEED_LEVELS; x1 by default
 
     while running:
@@ -114,8 +118,14 @@ def run(screen: pygame.Surface) -> None:
         draw_hud(screen, world, speed=speed)
         pygame.display.flip()
 
-        draw_inspector(inspector.surface, selected_agent)
-        inspector.flip()
+        if selected_agent is not None:
+            draw_inspector(inspector.surface, selected_agent)
+            inspector.flip()
+            inspector_empty_drawn = False
+        elif not inspector_empty_drawn:
+            draw_inspector(inspector.surface, None)
+            inspector.flip()
+            inspector_empty_drawn = True
 
     tick_log.close()
     inspector.destroy()
