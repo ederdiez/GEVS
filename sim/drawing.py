@@ -60,7 +60,11 @@ def draw_agents(screen: pygame.Surface, world, camera, selected=None) -> None:
     `selected`, if given, gets a highlighted ring (inspector selection).
     """
     r = cfg.AGENT_RADIUS * camera.zoom
+    x0, x1, y0, y1 = camera.visible_cell_range()
     for agent in world.entities:
+        # Skip agents outside the viewport (+1 cell margin for the radius/dot/ring).
+        if not (x0 - 1 <= agent.x <= x1 + 1 and y0 - 1 <= agent.y <= y1 + 1):
+            continue
         # Agent.x is in cell units, always inside [cx, cx + 1): the claimed
         # cell. Cell-center-to-pixel is just x * CELL_SIZE; the old
         # `+ CELL_SIZE // 2` shifted every agent one cell down-right.
@@ -88,7 +92,10 @@ def draw_animals(screen: pygame.Surface, world, camera) -> None:
     """Draw every animal as a square — distinct at a glance from the
     agents' circles."""
     r = cfg.ANIMAL_RADIUS * camera.zoom
+    x0, x1, y0, y1 = camera.visible_cell_range()
     for animal in world.animals:
+        if not (x0 - 1 <= animal.x <= x1 + 1 and y0 - 1 <= animal.y <= y1 + 1):
+            continue
         px, py = camera.to_screen(animal.x, animal.y)
         rect = pygame.Rect(px - r, py - r, r * 2, r * 2)
         pygame.draw.rect(screen, cfg.COLOR_AGENT_OUTLINE, rect.inflate(4, 4))

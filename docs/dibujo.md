@@ -43,10 +43,14 @@ que `Camera` (lógica pura, sin pygame) traduce coordenadas de celda a
 píxel de pantalla con un desplazamiento (`x`, `y`, en píxeles de mundo) y
 un zoom: `screen = (celda * CELL_SIZE - offset) * zoom`. Cada función de
 dibujo que coloca algo en el mundo (`draw_world`, `draw_agents`,
-`draw_animals`) recibe la cámara y la usa para convertir; `draw_world`
-además solo recorre `camera.visible_cell_range()` en vez del grid entero,
-así que el coste de dibujar no crece con el tamaño del mundo. El HUD y el
-overlay nocturno son en espacio de pantalla, no la usan.
+`draw_animals`) recibe la cámara y la usa para convertir; las tres
+además hacen *culling* con `camera.visible_cell_range()` — `draw_world`
+solo recorre esas celdas, y `draw_agents`/`draw_animals` se saltan
+(sin llamar a `pygame.draw`) cualquier agente/animal fuera de ese
+rango (más 1 celda de margen para el radio/anillo) — así que el coste
+de dibujar no crece con el tamaño del mundo ni con la población fuera
+de pantalla. El HUD y el overlay nocturno son en espacio de pantalla,
+no la usan.
 
 Controles (`sim/loop.py`):
 
