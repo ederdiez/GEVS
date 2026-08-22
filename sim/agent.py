@@ -103,9 +103,14 @@ class Agent:
         self.energy_drain_rate = cfg.ENERGY_DRAIN_RATE * t["energy_drain"]
         self.eat_rate = cfg.EAT_RATE * t["eat_rate"]
         self.rest_rate_mult = t["rest_rate"]  # scales the sleep recovery curve, not a flat rate
+        self.hp_max = cfg.BASE_AGENT_HP * t["hp"]
+        self.hp = self.hp_max
+        self.damage = cfg.BASE_AGENT_DAMAGE * t["damage"]
         self.age_s = 0.0
         self.alive = True
         self._mate_cooldown = 0.0
+        self._attack_cooldown = 0.0
+        self._hp_lost_this_tick = 0.0  # accumulated by take_damage(), consumed by the reward ladder
 
         # Needs (0-1). Initial values staggered so agents wake at different
         # times of the morning instead of all at once.
@@ -120,6 +125,7 @@ class Agent:
         self.grab_out = 0.0
         self.interact_out = 0.0
         self.drop_out = 0.0
+        self.attack_out = 0.0
         self.state = "active"      # derived: eating / resting / active
         # Carried resource (one slot; None or a cfg.CELL_* int). Filled by
         # the grab output, emptied by interact (use it) or drop (put it
@@ -151,12 +157,15 @@ class Agent:
     # -- brain signals --
 
     def _inputs(self) -> list:
-        """The 13 normalized inputs the brain reads (order matches config)."""
+        """The 17 normalized inputs the brain reads (order matches config)."""
         world = self.world
         dx, dy, dist = self._food_dir()
         food_close = 1.0 - min(dist / self.food_sense_range, 1.0) if dist is not None else 0.0
         odx, ody, odist = self._other_agent()
         other_close = 1.0 - min(odist / cfg.AGENT_SENSE_RANGE, 1.0) if odist is not None else 0.0
+        _animal, adx, ady, adist = self._animal_dir()
+        animal_close = 1.0 - min(adist / cfg.ANIMAL_SENSE_RANGE, 1.0) if adist is not None else 0.0
+        animal_danger = 1.0 if (_animal is not None and _animal.is_predator) else 0.0
         return [
             self.hunger,
             self.energy,
@@ -180,6 +189,15 @@ class Agent:
             # Not wired to any behavior yet (all-zero weights, config.py).
             self.x / world.cols,
             self.y / world.rows,
+            # Direction/closeness to the nearest animal, same shape as the
+            # other-agent sensor above. animal_danger is ground truth (the
+            # world says whether it's a predator); the weight on all 4 of
+            # these columns in move_x/move_y/attack is learned in life, not
+            # hand-tuned (LEARNABLE_CELLS, config.py).
+            (max(-1.0, min(1.0, adx)) + 1.0) / 2.0 if adx is not None else 0.5,
+            (max(-1.0, min(1.0, ady)) + 1.0) / 2.0 if ady is not None else 0.5,
+            animal_close,
+            animal_danger,
         ]
 
     def _food_dir(self):
@@ -221,11 +239,37 @@ class Agent:
                 best = (other.cx - self.cx, other.cy - self.cy, dist)
         return best if best is not None else (None, None, None)
 
+    def _animal_dir(self):
+        """Nearest animal by Manhattan; (animal, dx, dy, dist) or
+        (None, None, None, None).
+
+        Mirrors `_other_agent`, but returns the animal object too (not just
+        the delta) — the attack action needs to know who to hit, the same
+        reason `_mate_dir` returns the partner. Only senses within
+        ANIMAL_SENSE_RANGE.
+        """
+        best = None
+        for animal in self.world.animals:
+            if not animal.alive:
+                continue
+            dist = abs(animal.cx - self.cx) + abs(animal.cy - self.cy)
+            if dist > cfg.ANIMAL_SENSE_RANGE:
+                continue
+            if best is None or dist < best[3]:
+                best = (animal, animal.cx - self.cx, animal.cy - self.cy, dist)
+        return best if best is not None else (None, None, None, None)
+
+    def take_damage(self, amount: float) -> None:
+        """Called by Animal.update() when a predator lands a hit. Accumulated
+        hp loss feeds the reward ladder this same tick (see update())."""
+        self.hp = max(0.0, self.hp - amount)
+        self._hp_lost_this_tick += amount
+
     def _mate_eligible(self) -> bool:
         """Eligible to mate: alive, off cooldown, fed and rested enough.
 
         This drive lives in the body, not the brain: adding mate inputs
-        would break the 11->6->7 topology and the hand-tuned weights
+        would break the 17->6->8 topology and the hand-tuned weights
         (input 9 stays RESERVED, config.py).
         """
         return (self.alive and self._mate_cooldown <= 0.0
@@ -258,12 +302,24 @@ class Agent:
         """Think (brain) and act (body) for dt real seconds."""
         self.age_s += dt
         self._mate_cooldown = max(0.0, self._mate_cooldown - dt)
+        self._attack_cooldown = max(0.0, self._attack_cooldown - dt)
         # Hunger at the top of the tick: the reward at the bottom is the
         # need actually satisfied, not the action taken (see config.py
         # `# --- Reinforcement learning ---`).
         hunger_before = self.hunger
         (self.move_x, self.move_y, self.eat_out, self.rest_out, self.grab_out,
-         self.interact_out, self.drop_out) = self.brain.forward(self._inputs(), dt)
+         self.interact_out, self.drop_out, self.attack_out) = self.brain.forward(self._inputs(), dt)
+
+        # Attack: strike the nearest animal if it's a predator within reach.
+        # No instinct or reward for landing a hit (config.py) — only the
+        # penalty for being hurt shapes this, same as the flee response.
+        if self._attack_cooldown <= 0.0 and self.attack_out > cfg.ATTACK_OUTPUT_THRESHOLD:
+            animal, _, _, adist = self._animal_dir()
+            if animal is not None and animal.is_predator and adist <= 1.0:
+                animal.take_damage(self.damage)
+                self._attack_cooldown = cfg.ATTACK_COOLDOWN_S
+                if animal.hp <= 0.0:
+                    self.world.kill_animal(animal)
 
         # Survival reflex (below the brain, like biology): starving agents
         # never stop to rest — keep searching for food.
@@ -440,12 +496,18 @@ class Agent:
         #    its way to food — the case that broke that attempt — never pays it.
         if self.inventory is not None and self.hunger > cfg.HUNGER_CRITICAL:
             reward += cfg.PENALTY_STARVING_WITH_FOOD * dt
+        # 5. Damage taken from a predator this tick, relative to hp_max so
+        #    the `hp` trait doesn't rescale the reward (see config.py).
+        if self._hp_lost_this_tick > 0.0:
+            reward += cfg.PENALTY_ANIMAL_DAMAGE_K * (self._hp_lost_this_tick / self.hp_max)
+            self._hp_lost_this_tick = 0.0
         self.brain.learn(reward)
 
-        # Death: starvation (hunger >= 1.0), exhaustion (energy <= 0), or
-        # old age. Deferred: world.kill only marks the agent; the removal
-        # happens in world.end_frame() after the agent loop.
-        if self.hunger >= 1.0 or self.energy <= 0.0 or self.age_s >= cfg.MAX_AGE_S:
+        # Death: starvation (hunger >= 1.0), exhaustion (energy <= 0), old
+        # age, or killed by a predator. Deferred: world.kill only marks the
+        # agent; the removal happens in world.end_frame() after the agent loop.
+        if (self.hunger >= 1.0 or self.energy <= 0.0
+                or self.age_s >= cfg.MAX_AGE_S or self.hp <= 0.0):
             self.world.kill(self)
 
     def _move_axis(self, dx_units: float, dy_units: float, dt_step: float) -> None:

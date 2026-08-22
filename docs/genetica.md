@@ -1,9 +1,10 @@
 # Genética y reproducción
 
 Cada agente posee su propio **genoma** (`sim/genetics.py`): las tablas de
-pesos del cerebro más 6 **rasgos del cuerpo** — velocidad, rango de
-percepción de comida y ritmos de hambre/energía/comer/descansar — que
-multiplican las tasas base de `config.py`. La población inicial nace de
+pesos del cerebro más 8 **rasgos del cuerpo** — velocidad, rango de
+percepción de comida, ritmos de hambre/energía/comer/descansar, y `damage`/
+`hp` (daño propio y vida máxima, ver [Agentes → Depredadores](agentes.md))
+— que multiplican las tasas base de `config.py`. La población inicial nace de
 las tablas afinadas ± ruido pequeño (`INITIAL_WEIGHT_NOISE`,
 `INITIAL_TRAIT_NOISE`).
 
@@ -23,7 +24,7 @@ Dos agentes elegibles (energía ≥ `MATE_ENERGY_THRESHOLD`, hambre ≤
 (5 celdas)
 se buscan mutuamente: el reflejo de pareja vive en el **cuerpo** y
 sobreescribe la evitación de la red — el mismo patrón "cuerpo inviolable"
-que el food rush, sin tocar la topología 13→6→7 ni los pesos afinados (la
+que el food rush, sin tocar la topología 17→6→8 ni los pesos afinados (la
 **entrada 9 del cerebro sigue reservada**). A distancia 1 se aparean:
 
 1. Cada padre paga `MATE_ENERGY_COST` y ambos entran en `MATE_COOLDOWN_S`
@@ -49,8 +50,9 @@ que el food rush, sin tocar la topología 13→6→7 ni los pesos afinados (la
 
 ## Muerte
 
-`hunger ≥ 1.0`, `energy ≤ 0.0` o `age ≥ MAX_AGE_S` (300 s, 5 días
-simulados). `world.kill()` marca la
+`hunger ≥ 1.0`, `energy ≤ 0.0`, `age ≥ MAX_AGE_S` (300 s, 5 días
+simulados) o `hp ≤ 0.0` (matado por un depredador, ver [Agentes →
+Depredadores](agentes.md)). `world.kill()` marca la
 baja y libera la claim al instante; la remoción de `entities` se materializa
 en `world.end_frame()` — nunca se muta la lista en medio del bucle de
 agentes (`loop.py` llama a `end_frame` tras el bucle; los tests hacen lo

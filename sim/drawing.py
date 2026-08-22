@@ -84,6 +84,18 @@ def draw_agents(screen: pygame.Surface, world, selected=None) -> None:
                                (px, py), cfg.AGENT_RADIUS + 4, 2)
 
 
+def draw_animals(screen: pygame.Surface, world) -> None:
+    """Draw every animal as a square — distinct at a glance from the
+    agents' circles."""
+    r = cfg.ANIMAL_RADIUS
+    for animal in world.animals:
+        px = int(animal.x * cfg.CELL_SIZE)
+        py = int(animal.y * cfg.CELL_SIZE)
+        rect = pygame.Rect(px - r, py - r, r * 2, r * 2)
+        pygame.draw.rect(screen, cfg.COLOR_AGENT_OUTLINE, rect.inflate(4, 4))
+        pygame.draw.rect(screen, cfg.COLOR_ANIMAL, rect)
+
+
 _night_surf = None
 
 

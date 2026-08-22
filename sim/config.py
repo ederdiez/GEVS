@@ -96,6 +96,9 @@ BLOCKED_PROBE_S = 0.5      # s; while holding a blocked cell, re-probe it this o
 REST_WAKE_ENERGY = 0.60    # resting agents stay down until energy >= this (nap latch)
 MIN_ENERGY_TO_REST = 0.50  # can't fall asleep below this energy (exhausted agents keep moving)
 DETOUR_S = 0.4             # s; slide around a rock/border before resuming (2.4 cells at AGENT_SPEED)
+BASE_AGENT_HP = 100.0      # * genome trait "hp" = hp_max at birth
+BASE_AGENT_DAMAGE = 15.0   # * genome trait "damage" = damage dealt by attack
+ATTACK_COOLDOWN_S = 0.5    # s between hits, both agent attack and animal attack
 
 # Agent colors (drawing.py): state -> color
 COLOR_AGENT_WANDER = (200, 200, 210)   # active, not hungry
@@ -106,7 +109,7 @@ COLOR_AGENT_MATING = (214, 94, 194)    # magenta: in the mate cooldown (recently
 COLOR_AGENT_OUTLINE = (30, 32, 40)     # dark outline on every agent
 
 # --- Brain (neural network) ---
-# MLP: 13 inputs -> 6 hidden relu units -> 7 sigmoid outputs. Pure Python,
+# MLP: 17 inputs -> 6 hidden relu units -> 8 sigmoid outputs. Pure Python,
 # weights hand-tuned below so behavior is sensible. The brain proposes
 # intentions; the agent's body (agent.py) enforces what is inviolable.
 #
@@ -125,12 +128,20 @@ COLOR_AGENT_OUTLINE = (30, 32, 40)     # dark outline on every agent
 #                    resource), 0.0 if empty
 #   11 pos_x         absolute world position, x / GRID_COLS (0-1)
 #   12 pos_y         absolute world position, y / GRID_ROWS (0-1)
+#   13 animal_dir_x  (dx + 1) / 2 toward nearest animal; 0.5 if none in range
+#   14 animal_dir_y  same, Y axis
+#   15 animal_close  1 - min(dist / ANIMAL_SENSE_RANGE, 1); 0 if none in range
+#   16 animal_danger 1.0 if the nearest animal is a predator, 0.0 otherwise
+#                    (ground truth given by the world; what the agent must
+#                    learn is what to DO about it, not compute it — see
+#                    LEARNABLE_CELLS below)
 
 # Hidden layer: 6 readable detectors (relu). One row per unit; columns are
 # inputs 0-6 and 10 (needs, night, food direction, food_close, noise,
-# has_food); pos_x/pos_y (11, 12) are wired at zero — no detector reads
-# position yet. The output layer sees all 13 inputs via skip connections
-# (see below). Each unit is a condition detector:
+# has_food); pos_x/pos_y (11, 12) and the animal inputs (13-16) are wired
+# at zero — no detector reads position or animals yet. The output layer
+# sees all 17 inputs via skip connections (see below). Each unit is a
+# condition detector:
 #   h0 food_x     = relu(2*hunger + food_dir_x - 2)  hunger-gated food on X
 #   h1 food_y     = relu(2*hunger + food_dir_y - 2)  hunger-gated food on Y
 #   h2 sleepy     = relu(0.70 - energy)   energy below 0.70
@@ -146,18 +157,19 @@ COLOR_AGENT_OUTLINE = (30, 32, 40)     # dark outline on every agent
 # directly ahead. Food behind (food_dir < 2 - 2*hunger) never fires, so
 # pursuit never pushes the wrong way.
 BRAIN_W_HIDDEN = [
-    [2.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h0
-    [2.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h1
-    [0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], # h2
-    [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h3
-    [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h4
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],  # h5
+    [2.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h0
+    [2.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h1
+    [0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], # h2
+    [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h3
+    [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h4
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h5
 ]
 BRAIN_B_HIDDEN = [-2.0, -2.0, 0.70, -0.50, -0.20, -0.50]
 
-# Output layer: 7 outputs (move_x, move_y, eat, rest, grab, interact, drop). One row per output;
-# columns are the 6 hidden activations followed by the 13 raw inputs
-# (skip connections: the raw inputs also reach the outputs directly).
+# Output layer: 8 outputs (move_x, move_y, eat, rest, grab, interact, drop,
+# attack). One row per output; columns are the 6 hidden activations
+# followed by the 17 raw inputs (skip connections: the raw inputs also
+# reach the outputs directly).
 #   move_x, move_y:  direction, 2 * output - 1 in [-1, 1]. Food seeking is
 #                    hunger-gated: the food direction arrives through the
 #                    h0/h1 gates (see above), so a satiated agent has no
@@ -166,7 +178,11 @@ BRAIN_B_HIDDEN = [-2.0, -2.0, 0.70, -0.50, -0.20, -0.50]
 #                    with hunger (up to 2.4 at hunger 1.0). Avoidance:
 #                    negative weight (-3.0) on the other_dir sensor pushes
 #                    away from the nearest agent — it only engages when
-#                    someone is within AGENT_SENSE_RANGE.
+#                    someone is within AGENT_SENSE_RANGE. The animal_dir_x/y
+#                    columns (19, 20) start at 0 and are NOT hand-tuned:
+#                    they are in LEARNABLE_CELLS, so whether/how strongly to
+#                    move toward or away from a nearby animal is learned in
+#                    life from PENALTY_ANIMAL_DAMAGE_K, not wired by hand.
 #   eat:             desire to eat; body acts only when > EAT_OUTPUT_THRESHOLD
 #                    and the agent stands on a food cell. Hunger reaches the
 #                    row directly (skip weight 20.0); paired with the bias
@@ -243,6 +259,16 @@ BRAIN_B_HIDDEN = [-2.0, -2.0, 0.70, -0.50, -0.20, -0.50]
 #                    for it — that is the behavior worth having. Like the eat
 #                    row, the 6.0 weight is also drift margin: a mutation of
 #                    ±0.2 shifts the hunger crossing by only ±0.03.
+#   attack:          strike the nearest animal in ANIMAL_SENSE_RANGE if it is
+#                    within 1 cell (agent.py). No instinct at all — like
+#                    drop, it stays pure exploration at a deliberately low
+#                    rate (bias -3.40, noise weight 3.0 -> ~0.05% per tick)
+#                    so the row has occasions to fire and learn from. The 4
+#                    animal columns (19-22: dir_x, dir_y, close, danger) all
+#                    start at 0 and are in LEARNABLE_CELLS — whether being
+#                    near a dangerous animal should trigger an attack is
+#                    learned entirely from PENALTY_ANIMAL_DAMAGE_K, with no
+#                    hand-tuned pull toward or away from fighting.
 #   drop:            release the inventory onto the ground under the agent
 #                    (only onto an empty cell). No instinct at all — dropping
 #                    is not obviously smart, so it stays pure exploration at
@@ -252,14 +278,15 @@ BRAIN_B_HIDDEN = [-2.0, -2.0, 0.70, -0.50, -0.20, -0.50]
 #                    pushes this row further down; dropping while satiated is
 #                    neutral, leaving room for caching to be discovered.
 BRAIN_W_OUT = [
-    #      h0  h1  h2  h3  h4  h5 | hunger energy night dir_x dir_y close noise oth_x oth_y oth_close has_food pos_x pos_y
-    [2.4, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  -3.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # move_x
-    [0.0, 2.4, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  0.0, -3.0, 0.0, 0.0, 0.0, 0.0],  # move_y
-    [0.0, 0.0, 0.0, 0.0, 1.0, 0.0,  20.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # eat
-    [0.0, 0.0, 8.0, 8.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # rest
-    [0.0, 0.0, 0.0, 0.0, 1.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # grab
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.5,  6.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # interact
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # drop
+    #      h0  h1  h2  h3  h4  h5 | hunger energy night dir_x dir_y close noise oth_x oth_y oth_close has_food pos_x pos_y  a_dir_x a_dir_y a_close a_danger
+    [2.4, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  -3.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # move_x
+    [0.0, 2.4, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  0.0, -3.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # move_y
+    [0.0, 0.0, 0.0, 0.0, 1.0, 0.0,  20.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # eat
+    [0.0, 0.0, 8.0, 8.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # rest
+    [0.0, 0.0, 0.0, 0.0, 1.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # grab
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.5,  6.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # interact
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # drop
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0],  # attack
 ]
 # Movement biases: +0.5. The old -0.5 was tuned against a neutral food_dir
 # input (0.5 with no food) that contributed +2.4 * 0.5 = +1.2 to each move
@@ -269,12 +296,12 @@ BRAIN_W_OUT = [
 # i.e. [-1.0, +1.0] — symmetric, slightly livelier than the old
 # [-0.8, +0.8].
 # eat bias: -10.5 pairs with the 20.0 hunger skip (see the eat comment
-# above). grab/interact/drop biases set the exploration floor of each
-# learned row against BRAIN_EXPLORE_NOISE_W (see the block comment above
+# above). grab/interact/drop/attack biases set the exploration floor of
+# each learned row against its noise weight (see the block comment above
 # BRAIN_W_OUT for the firing-rate arithmetic): -3.36 -> grab babbles ~1.5%
 # of ticks, -6.9 -> interact is a sharp hunger gate crossing near 0.55,
-# -3.40 -> drop babbles ~0.05% of ticks.
-BRAIN_B_OUT = [0.5, 0.5, -10.5, -1.0, -3.36, -6.9, -3.40]
+# -3.40 -> drop and attack babble ~0.05% of ticks each.
+BRAIN_B_OUT = [0.5, 0.5, -10.5, -1.0, -3.36, -6.9, -3.40, -3.40]
 
 # Output thresholds: above these, the body acts on the intention.
 EAT_OUTPUT_THRESHOLD = 0.5
@@ -282,6 +309,7 @@ REST_OUTPUT_THRESHOLD = 0.6
 GRAB_OUTPUT_THRESHOLD = 0.4
 INTERACT_OUTPUT_THRESHOLD = 0.4
 DROP_OUTPUT_THRESHOLD = 0.4
+ATTACK_OUTPUT_THRESHOLD = 0.4
 
 # --- Inspector (per-agent neural network debug window) ---
 INSPECTOR_WINDOW_WIDTH = 700
@@ -336,6 +364,17 @@ LEARNING_RATE = 0.075          # tasa del ajuste hebbiano (~7x el 0.02 de antes:
 # deriva; dejar que una señal hebbiana difusa los erosione destruye justo
 # lo que protegen.
 LEARNABLE_OUTPUTS = (4, 5, 6)  # índices de fila en BRAIN_W_OUT
+# Extensión de grano fino: celdas (fila, columna) individuales que también
+# son plásticas en vida, ADEMÁS de las filas completas de arriba. Las usan
+# move_x/move_y/attack para las 4 señales de animal (columna_skip = 6
+# unidades ocultas + índice_input; animal_dir_x/y/close/danger son los
+# inputs 13-16 -> columnas 19-22): esas filas siguen siendo instinto para
+# todo lo demás (comida, otros agentes), pero nada se afina a mano para
+# los animales — se aprende por completo de PENALTY_ANIMAL_DAMAGE_K.
+_ANIMAL_SKIP_COLS = (19, 20, 21, 22)  # animal_dir_x, animal_dir_y, animal_close, animal_danger
+LEARNABLE_CELLS = tuple(
+    (row, col) for row in (0, 1, 7) for col in _ANIMAL_SKIP_COLS
+)  # move_x, move_y, attack
 ELIGIBILITY_TAU_S = 2.5       # s; constante de tiempo de la traza de elegibilidad
 BASELINE_TAU_S = 10.0         # s; constante de tiempo de "lo que esta neurona suele hacer"
 # La traza acredita la DESVIACIÓN de cada neurona respecto a su línea base,
@@ -398,6 +437,12 @@ PENALTY_STARVING_WITH_FOOD = -0.4  # por segundo, con hunger > HUNGER_CRITICAL y
 # comportamiento que sí funcionaba—, y ese agente tiene el inventario vacío,
 # así que nunca lo cobra. Aquí solo se castiga a quien lleva la solución
 # encima y no la usa.
+#
+# Daño de depredador: única señal que da forma a LEARNABLE_CELLS (las 4
+# columnas de animal en move_x/move_y/attack). Normalizado por hp_max (no
+# por daño crudo) para que el trait `hp` no descalibre la escala, igual
+# que REWARD_EAT_K usa hambre relativa en vez de comida cruda.
+PENALTY_ANIMAL_DAMAGE_K = -3.0  # x (hp perdido / hp_max) este tick
 
 # --- Death and population ---
 MAX_AGE_S = 300.0             # s; death by old age (5 simulated days)
@@ -410,6 +455,26 @@ MATE_COOLDOWN_S = 15.0        # s of waiting after mating (also the child's "inf
 MATE_RANGE = 5.0              # cells; mate reflex seeks partners within this radius
 MATE_ENERGY_COST = 0.25       # energy paid by EACH parent (threshold 0.6 - cost 0.25 -> never negative)
 CHILD_INITIAL_ENERGY = 0.80   # the child's starting energy
+
+# --- Animals (predators) ---
+# Scripted entities, no brain/genome of their own (sim/animal.py) — see
+# docs/arquitectura.md "Cómo añadir algo nuevo". Only one type exists
+# today, so a flat flag is enough; a type registry is for when a second
+# type is real.
+ANIMAL_SENSE_RANGE = 4.0   # cells; how far an agent can sense an animal (brain inputs)
+ANIMAL_DETECT_RANGE = 4.0  # cells; how far an animal can sense an agent to chase
+ANIMAL_HP = 40.0
+ANIMAL_DAMAGE = 4.0        # low on purpose: with zero hand-tuned flee/attack instinct
+                           # (LEARNABLE_CELLS), the first generations survive purely on
+                           # luck + noise-driven wander until reward shapes a response —
+                           # a low bite means many encounters instead of a handful of kills
+ANIMAL_SPEED = 3.0          # cells/s; well under AGENT_SPEED so undirected wander alone
+                             # has real odds of drifting out of ANIMAL_DETECT_RANGE
+ANIMAL_IS_PREDATOR = True
+ANIMAL_SPAWN_COUNT = 2
+ANIMAL_RESPAWN_S = 30.0     # s between respawns while population is below ANIMAL_SPAWN_COUNT (animals don't breed)
+COLOR_ANIMAL = (180, 40, 40)
+ANIMAL_RADIUS = 7           # px, draw radius
 
 # --- Logging ---
 LOG_DIR = "logs"              # one file per run, one line every LOG_INTERVAL_S

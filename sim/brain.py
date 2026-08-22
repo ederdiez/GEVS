@@ -1,7 +1,7 @@
 """Brain: a small multilayer perceptron, pure Python (no dependencies).
 
-The MLP is the agent's brain: it receives 11 signals and emits 7
-intentions (move_x, move_y, eat, rest, grab, interact, drop). All weights
+The MLP is the agent's brain: it receives 17 signals and emits 8
+intentions (move_x, move_y, eat, rest, grab, interact, drop, attack). All weights
 live in sim.config (hand-tuned, readable tables); this module only does
 the forward pass. See config.py `# --- Brain ---` for the meaning of
 every unit and every weight.
@@ -163,6 +163,11 @@ class Brain:
         survive drift; letting a diffuse Hebbian signal erode them destroys
         the thing those margins protect. They still evolve — mutation
         reaches every weight — just not within one lifetime.
+
+        cfg.LEARNABLE_CELLS adds finer-grained plasticity on top: individual
+        (row, col) weights that learn in life even in a row that is
+        otherwise instinct (move_x/move_y/attack for the animal_dir/close/
+        danger columns) — the rest of that row stays untouched here.
         """
         if reward == 0.0:
             return
@@ -171,6 +176,11 @@ class Brain:
             self.w_out[i] = [_clamp(w + lr * reward * e)
                              for w, e in zip(self.w_out[i], self._elig_w_out[i])]
             self.b_out[i] = _clamp(self.b_out[i] + lr * reward * self._elig_b_out[i])
+        for row, col in cfg.LEARNABLE_CELLS:
+            if row in cfg.LEARNABLE_OUTPUTS:
+                continue  # already updated above, avoid double-applying
+            self.w_out[row][col] = _clamp(
+                self.w_out[row][col] + lr * reward * self._elig_w_out[row][col])
 
     def forward_debug(self, inputs) -> tuple:
         """Like forward(), but also returns the hidden activations.

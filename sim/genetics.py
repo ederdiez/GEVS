@@ -9,8 +9,9 @@ writes back into the Genome. crossover()/mutate() are PURE: they return
 a new Genome and never touch self.
 
 Traits are multipliers ~1.0 over the base body rates in sim.config
-(speed, food_sense, hunger_rate, energy_drain, eat_rate, rest_rate),
-clamped to [TRAIT_MIN, TRAIT_MAX] (see config.py `# --- Genetics ---`).
+(speed, food_sense, hunger_rate, energy_drain, eat_rate, rest_rate,
+damage, hp), clamped to [TRAIT_MIN, TRAIT_MAX] (see config.py
+`# --- Genetics ---`).
 """
 
 import math
@@ -19,7 +20,7 @@ from sim import config as cfg
 from sim.brain import Brain
 
 # Order of the body traits inside a Genome (dict keys and flat() repr).
-TRAIT_KEYS = ("speed", "food_sense", "hunger_rate", "energy_drain", "eat_rate", "rest_rate")
+TRAIT_KEYS = ("speed", "food_sense", "hunger_rate", "energy_drain", "eat_rate", "rest_rate", "damage", "hp")
 
 
 def _clamp_weight(w: float) -> float:

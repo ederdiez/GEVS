@@ -44,9 +44,11 @@ ventana. Contiene dos cosas:
 | `release(x, y, agent)`  | Soltar la claim (solo el dueño puede).        |
 | `occupied`              | `dict` `(x, y) → agent`: las celdas reclamadas (nunca dos agentes en una). |
 | `entities`              | Lista de agentes vivos en el mundo.           |
+| `animals`                | Lista de animales vivos (`sim.animal.Animal`, depredadores scripted — ver [Agentes → Depredadores](agentes.md)); no reclaman celda en `occupied`. |
 | `rng`                   | Aleatorio determinista del mundo (seed fija): aquí vive todo el azar de la simulación. |
 | `spawn_agent(cx, cy, ...)` | Crea un agente (población inicial y nacimientos) y reclama su celda. |
 | `kill(agent)`           | Marca la baja y libera la claim al instante; la remoción se materializa en `end_frame()`. |
+| `kill_animal(animal)`   | Igual que `kill()` para un animal (sin claim que liberar); la remoción se materializa en `end_frame()`. |
 | `mate(a, b)`            | Apareamiento: coste de energía, cooldown mutuo y nacimiento diferido (crossover + mutación). |
-| `end_frame()`           | Tras el bucle de agentes: baja a los muertos y coloca a los nacidos. |
+| `end_frame()`           | Tras el bucle de agentes: baja a los muertos (agentes y animales) y coloca a los nacidos. |
 | `stats_deaths` / `stats_births` | Contadores acumulados de muertes y nacimientos (HUD). |

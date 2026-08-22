@@ -5,6 +5,7 @@ import pygame
 from sim import config
 from sim.drawing import (
     draw_agents,
+    draw_animals,
     draw_background,
     draw_hud,
     draw_night_overlay,
@@ -69,6 +70,10 @@ def run(screen: pygame.Surface) -> None:
         speed = config.SPEED_LEVELS[speed_index]
         for _ in range(speed):
             world.update(dt)
+            # Animals move/attack before agents, so an agent's reward this
+            # same tick already reflects any damage just taken (agent.py).
+            for animal in world.animals:
+                animal.update(dt)
             for agent in world.entities:
                 agent.update(dt)
             world.end_frame()
@@ -83,6 +88,7 @@ def run(screen: pygame.Surface) -> None:
         draw_background(screen, world)
         draw_world(screen, world)
         draw_agents(screen, world, selected=selected_agent)
+        draw_animals(screen, world)
         draw_night_overlay(screen, world)
         draw_hud(screen, world, speed=speed)
         pygame.display.flip()

@@ -7,13 +7,15 @@ The clock advances in update(dt) and drives the day/night cycle.
 
 Food (resources) can be eaten: the cell empties and regrows after
 RESOURCE_REGROW_S. Agents occupy cells exclusively via claims
-(`occupied`), so two agents never share a cell.
+(`occupied`), so two agents never share a cell. Animals (sim.animal,
+predators) live in a separate list and don't claim cells.
 """
 
 import random
 
 from sim import config as cfg
 from sim.agent import Agent
+from sim.animal import Animal
 
 
 class World:
@@ -53,7 +55,13 @@ class World:
         self.stats_deaths = 0
         self.stats_births = 0
 
+        # --- animals (predators; scripted, no genome) ---
+        self.animals = []
+        self.pending_animal_deaths = []
+        self._animal_respawn_timer = cfg.ANIMAL_RESPAWN_S
+
         self._spawn_agents()
+        self._spawn_animals()
 
     # -- generation (deterministic for a given seed) --
 
@@ -109,6 +117,25 @@ class World:
         self.occupied[(cx, cy)] = agent
         return agent
 
+    # -- animals (predators) --
+
+    def _spawn_animals(self) -> None:
+        """Place ANIMAL_SPAWN_COUNT animals on distinct walkable cells.
+        Mirrors _spawn_agents; animals don't claim a cell in `occupied`."""
+        spots = [(x, y) for y in range(self.rows) for x in range(self.cols)
+                 if self.is_walkable(x, y)]
+        self.rng.shuffle(spots)
+        for cx, cy in spots[:cfg.ANIMAL_SPAWN_COUNT]:
+            self.animals.append(Animal(self, cx, cy))
+
+    def kill_animal(self, animal) -> None:
+        """Mark an animal for removal; materializes in end_frame(). Mirrors
+        kill(), minus the `occupied` release (animals never claim a cell)."""
+        if not animal.alive:
+            return
+        animal.alive = False
+        self.pending_animal_deaths.append(animal)
+
     # -- simulation clock --
 
     def update(self, dt: float) -> None:
@@ -118,6 +145,22 @@ class World:
             self.day += 1
             self.time_sim %= cfg.DAY_LENGTH_S
         self._update_regrowth(dt)
+        self._update_animal_respawn(dt)
+
+    def _update_animal_respawn(self, dt: float) -> None:
+        """Animals don't breed, so replace losses on a timer or predator
+        pressure would only ever decay to zero."""
+        if len(self.animals) >= cfg.ANIMAL_SPAWN_COUNT:
+            self._animal_respawn_timer = cfg.ANIMAL_RESPAWN_S
+            return
+        self._animal_respawn_timer -= dt
+        if self._animal_respawn_timer <= 0.0:
+            self._animal_respawn_timer = cfg.ANIMAL_RESPAWN_S
+            spots = [(x, y) for y in range(self.rows) for x in range(self.cols)
+                     if self.is_walkable(x, y)]
+            if spots:
+                cx, cy = self.rng.choice(spots)
+                self.animals.append(Animal(self, cx, cy))
 
     def _update_regrowth(self, dt: float) -> None:
         """Count down regrow timers; a timer reaching 0 restores the food."""
@@ -245,6 +288,9 @@ class World:
         for agent in self.pending_deaths:
             self.entities.remove(agent)
         self.pending_deaths.clear()
+        for animal in self.pending_animal_deaths:
+            self.animals.remove(animal)
+        self.pending_animal_deaths.clear()
         for spot, a, b, genome in self.pending_births:
             if not self._cell_free_for_spawn(*spot):
                 spot = self._find_child_spot(a)   # spot got away: re-search

@@ -19,9 +19,13 @@ Una función por elemento, y el bucle las llama en este orden (importa):
    oscuro. El agente seleccionado para el inspector (clic, ver
    [Agentes → El inspector](agentes.md)) recibe un anillo
    (`COLOR_SELECTED_OUTLINE`).
-4. `draw_night_overlay` — oscurece el mundo de noche (surface translúcida);
-   los agentes se oscurecen con el mundo (dormidos de noche, coherente).
-5. `draw_hud` — "Día N  HH:MM" y "Población: N  †muertes  +nacimientos"
+4. `draw_animals` — un cuadrado por animal (`COLOR_ANIMAL`), a propósito
+   distinto de los círculos de los agentes — ver [Agentes →
+   Depredadores](agentes.md).
+5. `draw_night_overlay` — oscurece el mundo de noche (surface translúcida);
+   agentes y animales se oscurecen con el mundo (dormidos/activos de
+   noche, coherente).
+6. `draw_hud` — "Día N  HH:MM" y "Población: N  †muertes  +nacimientos"
    (siempre legible, encima del overlay).
 
 > **Perspectiva:** la vista es top-down pura (el mundo se ve desde arriba),

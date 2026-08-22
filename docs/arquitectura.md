@@ -14,6 +14,7 @@ gevs_ia/
     ├── window.py        # Crea la ventana de pygame.
     ├── world.py         # Lógica pura del mundo: grid + reloj + comida + claims + nacimientos/muertes (sin pygame).
     ├── agent.py         # El agente: cuerpo que ejecuta las intenciones del cerebro.
+    ├── animal.py        # Depredadores: entidad scripted, sin red ni genoma propios.
     ├── brain.py         # MLP pura en Python: forward de la red + aprendizaje Hebbiano personal (learn()).
     ├── genetics.py      # Genoma: pesos del cerebro + rasgos del cuerpo; crossover, mutación, clon.
     ├── drawing.py       # Funciones de dibujo (una función por elemento).
@@ -29,14 +30,16 @@ main.py
   └─ loop.run(screen)         →  crea la ventana del inspector, luego bucle infinito:
         1. eventos (cerrar ventana, clic → seleccionar agente, resize del
            inspector, +/- → cambia el multiplicador de velocidad...)
-        2. world.update(dt)   →  reloj + regrow de comida
+        2. world.update(dt)   →  reloj + regrow de comida + respawn de animales
+           + cada animal: animal.update(dt) (deambular/perseguir/atacar, scripted)
            + cada agente: brain.forward(inputs, dt) (+ traza de elegibilidad)
              + cuerpo (movimiento, comer, descansar, recoger/usar/soltar el
-             inventario, aparearse) + brain.learn(reward)
+             inventario, aparearse, atacar) + brain.learn(reward)
            + world.end_frame() → materializa las muertes y nacimientos diferidos
+           (agentes y animales)
            — este paso se repite `speed` veces por frame dibujado (ver
            "Velocidad de simulación" abajo)
-        3. dibujar            ← drawing.py (5 capas, en orden) en la ventana principal
+        3. dibujar            ← drawing.py (6 capas, en orden) en la ventana principal
         4. inspector.draw_inspector() → red del agente seleccionado, en su propia ventana
         5. esperar al próximo frame (FPS)
 ```
@@ -68,6 +71,7 @@ mismo `world.rng`). El HUD muestra "Velocidad: x{n}" cuando no es x1.
 | Aprendizaje personal (tasa, decaimiento, recompensa) | sección `# --- Reinforcement learning ---` en `sim/config.py` y `Brain.learn()` en `sim/brain.py`. |
 | Reproducción (umbrales, cooldown, coste, rango) | sección `# --- Reproduction ---` en `sim/config.py`. |
 | Muerte y tope de población | `MAX_AGE_S` / `MAX_POPULATION` en `sim/config.py`. |
+| Depredadores (hp, daño, rango, spawn) | sección `# --- Animals (predators) ---` en `sim/config.py`, comportamiento en `sim/animal.py`. |
 | El genoma (crossover/mutación/clon) | `sim/genetics.py`.                    |
 | Lo que un agente puede/cómo se mueve | `sim/agent.py` (el cuerpo).         |
 | Las señales que la red recibe | `Agent._inputs()` en `sim/agent.py`. |
