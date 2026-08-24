@@ -534,6 +534,14 @@ PENALTY_STARVING_WITH_FOOD = -0.4  # por segundo, con hunger > HUNGER_CRITICAL y
 # hambre relativa en vez de comida cruda.
 PENALTY_ANIMAL_DAMAGE_K = -3.0  # x (hp perdido / hp_max) este tick
 
+# Salir del alcance de mordisco de un depredador que un instante antes te
+# tenía adyacente premia la huida — el mismo evento que antes solo castigaba
+# el mordisco recibido. Matar al depredador paga 1.5x: mejor que huir, pero
+# ninguno de los dos supera el castigo evitado por no ser mordido en primer
+# lugar (ver PENALTY_ANIMAL_DAMAGE_K arriba).
+REWARD_ESCAPE_ANIMAL = 0.3
+REWARD_KILL_ANIMAL = REWARD_ESCAPE_ANIMAL * 1.5
+
 # --- Death and population ---
 MAX_AGE_S = 600.0             # s; death by old age (10 simulated days)
 MAX_POPULATION = 120           # safety cap on the living population

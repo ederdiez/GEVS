@@ -441,12 +441,21 @@ class Agent:
          self.interact_out, self.drop_out, self.attack_out, self.target_animal_out,
          self.target_agent_out) = self.brain.forward(self._last_inputs, dt)
 
+        # Snapshot before the attack/movement below: was a predator already
+        # adjacent (biting range)? Feeds the escape reward at the bottom of
+        # the tick (see `# 6.` below) — escaping only pays out for a threat
+        # that was actually there a moment ago, not just "no animal nearby".
+        _animal_before, _, _, _adist_before = self._animal_dir()
+        predator_adjacent_before = (
+            _animal_before is not None and _animal_before.is_predator and _adist_before <= 1.0)
+        killed_animal = False
+
         # Attack: strike whichever target the brain locked onto — the
         # nearest predator (target_animal) or the nearest other agent
         # (target_agent), within 1 cell. If both cross their threshold the
-        # stronger raw output wins. No instinct or reward for landing a hit
-        # (config.py) — only the penalty for being hurt shapes this, same
-        # as the flee response, for either kind of target.
+        # stronger raw output wins. No instinct for landing a hit (config.py)
+        # — only the penalty for being hurt and the escape/kill reward below
+        # shape this.
         if self._attack_cooldown <= 0.0 and self.attack_out > cfg.ATTACK_OUTPUT_THRESHOLD:
             want_animal = self.target_animal_out > cfg.TARGET_ANIMAL_OUTPUT_THRESHOLD
             want_agent = self.target_agent_out > cfg.TARGET_AGENT_OUTPUT_THRESHOLD
@@ -470,6 +479,8 @@ class Agent:
                 self._attack_cooldown = cfg.ATTACK_COOLDOWN_S
                 if victim.hp <= 0.0:
                     (self.world.kill_animal if target_animal else self.world.kill)(victim)
+                    if target_animal:
+                        killed_animal = True
 
         # Survival reflex (below the brain, like biology): starving agents
         # never stop to rest — keep searching for food.
@@ -659,6 +670,18 @@ class Agent:
         if self._hp_lost_this_tick > 0.0:
             reward += cfg.PENALTY_ANIMAL_DAMAGE_K * (self._hp_lost_this_tick / self.hp_max)
             self._hp_lost_this_tick = 0.0
+        # 6. Animal encounter outcome. Killing pays more than escaping, but
+        #    only one of the two ever fires for a given adjacent predator
+        #    (killing it removes it, so the escape check below never also
+        #    sees it as "gone").
+        if killed_animal:
+            reward += cfg.REWARD_KILL_ANIMAL
+        elif predator_adjacent_before:
+            _animal_after, _, _, _adist_after = self._animal_dir()
+            escaped = not (_animal_after is not None and _animal_after.is_predator
+                            and _adist_after <= 1.0)
+            if escaped:
+                reward += cfg.REWARD_ESCAPE_ANIMAL
         self.brain.learn(reward)
 
         # Death: starvation (hunger >= 1.0), exhaustion (energy <= 0), old
@@ -843,6 +866,65 @@ def _selfcheck() -> None:
     _interact_resource(agent)
     assert agent.inventory is None
     assert agent.eat_timer > 0.0
+
+    # Reward ladder: escaping an adjacent predator, and the 1.5x kill bonus
+    # (config.py REWARD_ESCAPE_ANIMAL / REWARD_KILL_ANIMAL). Brain is stubbed
+    # so the outputs are exact regardless of the (untrained) weights, and
+    # _move_axis is replaced with a plain position update so the test
+    # exercises the reward math, not the claim/detour system (already
+    # covered elsewhere).
+    from sim.animal import Animal
+
+    class _FakeBrain:
+        def __init__(self, outputs):
+            self.outputs = outputs
+            self.rewards = []
+
+        def forward(self, inputs, dt):
+            return self.outputs
+
+        def learn(self, reward):
+            self.rewards.append(reward)
+
+    def _direct_move(dx_units, dy_units, dt_step, a=agent, w=world):
+        a.x, a.y = w.wrap(a.x + dx_units, a.y + dy_units)
+        a.cx, a.cy = int(a.x), int(a.y)
+
+    orig_entities = world.entities
+    world.entities = [agent]
+    agent._move_axis = _direct_move
+    agent.hunger = 0.0
+    agent.inventory = None
+    agent._resting = False
+    agent.eat_timer = 0.0
+    agent._attack_cooldown = 0.0
+    agent._mate_cooldown = 999.0  # keep the mate reflex from overriding the test's move direction
+
+    # Escape: predator adjacent (dist 1) at the start of the tick, brain
+    # moves straight away from it and never attacks -> reward == REWARD_ESCAPE_ANIMAL.
+    agent.cx, agent.cy = 10, 10
+    agent.x, agent.y = 10.5, 10.5
+    prey_animal = Animal(world, 11, 10)
+    world.animals = [prey_animal]
+    agent.brain = _FakeBrain((0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
+    agent.update(1.0)
+    assert agent.cx < 10, "agent should have moved away on the x axis"
+    assert abs(agent.brain.rewards[-1] - cfg.REWARD_ESCAPE_ANIMAL) < 1e-9
+
+    # Kill: same adjacency, brain attacks and one-shots the (low-hp) animal
+    # instead of moving -> reward == REWARD_KILL_ANIMAL == 1.5x the escape reward.
+    agent.cx, agent.cy = 10, 10
+    agent.x, agent.y = 10.5, 10.5
+    prey_animal2 = Animal(world, 11, 10)
+    prey_animal2.hp = 1.0
+    world.animals = [prey_animal2]
+    agent.brain = _FakeBrain((0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0))
+    agent.update(0.1)
+    assert not prey_animal2.alive
+    assert abs(agent.brain.rewards[-1] - cfg.REWARD_KILL_ANIMAL) < 1e-9
+    assert cfg.REWARD_KILL_ANIMAL == cfg.REWARD_ESCAPE_ANIMAL * 1.5
+
+    world.entities = orig_entities
 
     print("agent self-check OK")
 

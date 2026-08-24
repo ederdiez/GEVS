@@ -348,11 +348,19 @@ dentro de `ANIMAL_SENSE_RANGE`.
 
 **Nada de esto está cableado a mano en la respuesta del agente**: huir,
 ignorar o atacar es enteramente aprendido en vida (ver `LEARNABLE_CELLS`
-arriba) a partir de `PENALTY_ANIMAL_DAMAGE_K` — el único término de reward
-nuevo, proporcional a `hp perdido / hp_max` este tick. No hay recompensa
-por golpear a propósito: la traza de elegibilidad ya correlaciona
-`attack`/`move_x`/`move_y` con su propia desviación, así que basta con
-castigar el daño recibido.
+arriba) a partir de tres términos de reward, todos nuevos:
+
+| Peldaño | Cuándo |
+| --- | --- |
+| `PENALTY_ANIMAL_DAMAGE_K` × (hp perdido / hp_max) | recibir daño este tick |
+| `REWARD_ESCAPE_ANIMAL` | un depredador estaba adyacente (a distancia de mordisco) al empezar el tick y deja de estarlo al terminar — sin haberlo matado |
+| `REWARD_KILL_ANIMAL` (= 1.5 × `REWARD_ESCAPE_ANIMAL`) | el ataque de este tick deja al depredador con hp ≤ 0 |
+
+Escapar y matar son mutuamente excluyentes en el mismo encuentro: si el
+ataque lo mata, ya no está "adyacente al terminar el tick" por la razón
+correcta (está muerto), así que solo se cobra el bonus de matar, nunca los
+dos. Matar paga más que escapar pero ninguno de los dos supera el castigo
+evitado por no ser mordido en primer lugar.
 
 Densidad y presión ajustables en `config.py` `# --- Animals (predators)
 ---`: bajarlas si la población se extingue, subirlas si nunca hay presión
