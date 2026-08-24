@@ -1,7 +1,7 @@
 # Los agentes: cerebro NN + cuerpo
 
 **La red propone, el cuerpo ejecuta.** Todo el comportamiento sale de una
-red neuronal (`sim/brain.py`, MLP en Python puro: 18 entradas → 8 neuronas
+red neuronal (`sim/brain.py`, MLP en Python puro: 19 entradas → 8 neuronas
 ocultas relu → 10 salidas sigmoid). La red emite *intenciones*; un cuerpo
 (`sim/agent.py`) garantiza lo inviolable: no pisar rocas, no ocupar una
 celda ajena, comer solo donde hay comida, no moverse mientras se descansa,
@@ -25,7 +25,7 @@ de ellas convierten la madera en lanza in situ, sin que salga nunca del
 inventario) y `interact` sobre una lanza equipada no hace nada, porque su
 bonus de daño es pasivo (ver [Depredadores](#depredadores)).
 
-## Entradas de la red (18, normalizadas a [0,1])
+## Entradas de la red (19, normalizadas a [0,1])
 
 Calculadas cada frame en `Agent._inputs()`:
 
@@ -49,6 +49,7 @@ Calculadas cada frame en `Agent._inputs()`:
 | 15 | `animal_close` | `1 - min(dist / ANIMAL_SENSE_RANGE, 1)`; 0 si no hay animal en rango |
 | 16 | `animal_danger` | 1.0 si el animal detectado es depredador, 0.0 si no o si no hay ninguno — verdad fundamental que da el mundo, no una inferencia del agente |
 | 17 | `agent_has_spear` | 1.0 si el otro agente más cercano (dentro de `AGENT_SENSE_RANGE`) lleva una lanza equipada en el inventario, 0.0 si no o si no hay ninguno en rango — verdad fundamental como `animal_danger`, reaccionar es aprendido |
+| 18 | `agent_has_food` | 1.0 si el otro agente más cercano (dentro de `AGENT_SENSE_RANGE`) lleva comida (`CELL_RESOURCE` o `CELL_MEAT`) en el inventario, 0.0 si no o si no hay ninguno en rango — verdad fundamental como `agent_has_spear`, reaccionar (acercarse, evitar, atacar) es aprendido |
 
 ## Capa oculta (8 neuronas relu: 6 detectores legibles + 2 plásticas)
 
@@ -373,11 +374,12 @@ animal, ver [sistema de carne](#depredadores)).
 `Agent.take_damage()` no distingue si el golpe vino de un animal o de otro
 agente, así que `PENALTY_ANIMAL_DAMAGE_K` moldea la respuesta a ambas
 amenazas por igual. El input `agent_has_spear` (17) da al agente verdad
-fundamental sobre si el más cercano va armado; junto con las columnas de
-dirección/cercanía del otro agente, es plástico en vida en
+fundamental sobre si el más cercano va armado; el input `agent_has_food`
+(18) hace lo mismo para si lleva comida encima. Junto con las columnas de
+dirección/cercanía del otro agente, ambos son plásticos en vida en
 `move_x`/`move_y`/`attack`/`target_agent` (`_OTHER_SKIP_COLS` en
-`config.py`) — evitar, ignorar o cazar a un agente armado es aprendido,
-no cableado.
+`config.py`) — evitar, ignorar, cazar a un agente armado o acercarse a
+uno que lleva comida es aprendido, no cableado.
 
 ## El inspector (`sim/inspector.py`)
 
@@ -388,7 +390,7 @@ multi-ventana de pygame 2 / SDL2, `loop.py` la crea con
 `create_inspector_window()`) dibuja en vivo, tick a tick:
 
 - barras de `hunger`/`energy`/`hp`, generación, edad y estado;
-- el grafo completo de la red — 18 entradas, 8 ocultas, 10 salidas,
+- el grafo completo de la red — 19 entradas, 8 ocultas, 10 salidas,
   coloreado por activación: el inspector lee `Brain._last_hidden`/
   `_last_outputs`, que `forward()` ya guarda cada tick, en vez de volver
   a calcular nada — así abrir el inspector no acelera el aprendizaje

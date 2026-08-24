@@ -17,7 +17,7 @@ INPUT_LABELS = [
     "hunger", "energy", "night", "food_dx", "food_dy",
     "food_close", "noise", "other_dx", "other_dy", "other_close", "has_food",
     "pos_x", "pos_y", "animal_dx", "animal_dy", "animal_close", "animal_danger",
-    "agent_spear",
+    "agent_spear", "agent_food",
 ]
 HIDDEN_LABELS = ["food_x", "food_y", "sleepy", "night", "food_ahead", "carrying", "learn_1", "learn_2"]
 OUTPUT_LABELS = ["move_x", "move_y", "eat", "rest", "grab", "interact", "drop", "attack",

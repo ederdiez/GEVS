@@ -125,7 +125,7 @@ COLOR_AGENT_MATING = (214, 94, 194)    # magenta: in the mate cooldown (recently
 COLOR_AGENT_OUTLINE = (30, 32, 40)     # dark outline on every agent
 
 # --- Brain (neural network) ---
-# MLP: 17 inputs -> 8 hidden relu units -> 8 sigmoid outputs. Pure Python,
+# MLP: 19 inputs -> 8 hidden relu units -> 10 sigmoid outputs. Pure Python,
 # weights hand-tuned below so behavior is sensible. The brain proposes
 # intentions; the agent's body (agent.py) enforces what is inviolable.
 #
@@ -157,13 +157,19 @@ COLOR_AGENT_OUTLINE = (30, 32, 40)     # dark outline on every agent
 #                    Ground truth like animal_danger — whether/how to react
 #                    (avoid, target) is learned in life, not hand-tuned
 #                    (LEARNABLE_CELLS below).
+#   18 agent_has_food 1.0 if the nearest other agent (within
+#                    AGENT_SENSE_RANGE) is carrying food (CELL_RESOURCE or
+#                    CELL_MEAT) in its inventory, 0.0 otherwise (also 0.0 if
+#                    none in range). Ground truth like agent_has_spear —
+#                    whether to react (approach, avoid, target) is learned
+#                    in life, not hand-tuned (LEARNABLE_CELLS below).
 
 # Hidden layer: 8 units, relu. One row per unit; columns are inputs
 # 0-6 and 10 (needs, night, food direction, food_close, noise, has_food);
-# pos_x/pos_y (11, 12), the animal inputs (13-16) and agent_has_spear (17)
-# are wired at zero — no detector reads position, animals or the new spear
-# signal yet. The output layer sees all 18 inputs via skip connections (see
-# below). The first 6 units are readable
+# pos_x/pos_y (11, 12), the animal inputs (13-16), agent_has_spear (17) and
+# agent_has_food (18) are wired at zero — no detector reads position,
+# animals or the other-agent inventory signals yet. The output layer sees
+# all 19 inputs via skip connections (see below). The first 6 units are readable
 # hand-tuned condition detectors, pure instinct (mutation only, never
 # touched by learn() — see LEARNABLE_HIDDEN below):
 #   h0 food_x     = relu(2*hunger + food_dir_x - 2)  hunger-gated food on X
@@ -189,20 +195,20 @@ COLOR_AGENT_OUTLINE = (30, 32, 40)     # dark outline on every agent
 # hidden->output side) — blank capacity the agent itself can learn to
 # use, instead of only evolution.
 BRAIN_W_HIDDEN = [
-    [2.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h0
-    [2.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h1
-    [0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], # h2
-    [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h3
-    [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h4
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h5
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h6 (neutral, plastic in life)
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h7 (neutral, plastic in life)
+    [2.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h0
+    [2.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h1
+    [0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], # h2
+    [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h3
+    [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h4
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h5
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h6 (neutral, plastic in life)
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # h7 (neutral, plastic in life)
 ]
 BRAIN_B_HIDDEN = [-2.0, -2.0, 0.70, -0.50, -0.20, -0.50, 0.0, 0.0]
 
 # Output layer: 10 outputs (move_x, move_y, eat, rest, grab, interact, drop,
 # attack, target_animal, target_agent). One row per output; columns are the
-# 8 hidden activations followed by the 18 raw inputs (skip connections: the
+# 8 hidden activations followed by the 19 raw inputs (skip connections: the
 # raw inputs also reach the outputs directly).
 #   move_x, move_y:  direction, 2 * output - 1 in [-1, 1]. Food seeking is
 #                    hunger-gated: the food direction arrives through the
@@ -325,17 +331,17 @@ BRAIN_B_HIDDEN = [-2.0, -2.0, 0.70, -0.50, -0.20, -0.50, 0.0, 0.0]
 #                    lock onto a nearby animal or agent is learned in life,
 #                    not wired by hand.
 BRAIN_W_OUT = [
-    #      h0  h1  h2  h3  h4  h5  h6  h7 | hunger energy night dir_x dir_y close noise oth_x oth_y oth_close has_food pos_x pos_y  a_dir_x a_dir_y a_close a_danger spear
-    [2.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  -3.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],  # move_x
-    [0.0, 2.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  0.0, -3.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],  # move_y
-    [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,  20.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],  # eat
-    [0.0, 0.0, 8.0, 8.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],  # rest
-    [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],  # grab
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0,  6.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],  # interact
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],  # drop
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],  # attack
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],  # target_animal
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],  # target_agent
+    #      h0  h1  h2  h3  h4  h5  h6  h7 | hunger energy night dir_x dir_y close noise oth_x oth_y oth_close has_food pos_x pos_y  a_dir_x a_dir_y a_close a_danger spear agent_food
+    [2.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  -3.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # move_x
+    [0.0, 2.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0,  0.0, -3.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # move_y
+    [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,  20.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # eat
+    [0.0, 0.0, 8.0, 8.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # rest
+    [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # grab
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0,  6.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # interact
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # drop
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # attack
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # target_animal
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # target_agent
 ]
 # Movement biases: +0.5. The old -0.5 was tuned against a neutral food_dir
 # input (0.5 with no food) that contributed +2.4 * 0.5 = +1.2 to each move
@@ -428,11 +434,14 @@ LEARNABLE_OUTPUTS = (4, 5, 6)  # índices de fila en BRAIN_W_OUT
 _ANIMAL_SKIP_COLS = (21, 22, 23, 24)  # animal_dir_x, animal_dir_y, animal_close, animal_danger
 # Espejo para el otro agente más cercano: move_x/move_y/attack y el nuevo
 # target_agent (decide si el objetivo es un agente en vez de un animal)
-# aprenden en vida sus 3 columnas de dirección/cercanía más la nueva señal
-# agent_has_spear (input 17 -> columna 25) — ataque entre agentes, igual
-# que el de animales, se aprende por completo del daño recibido
-# (PENALTY_ANIMAL_DAMAGE_K también cubre el daño infligido por otro agente).
-_OTHER_SKIP_COLS = (15, 16, 17, 25)  # other_dir_x, other_dir_y, other_close, agent_has_spear
+# aprenden en vida sus 3 columnas de dirección/cercanía más las señales
+# agent_has_spear (input 17 -> columna 25) y agent_has_food (input 18 ->
+# columna 26) — ataque entre agentes, igual que el de animales, se aprende
+# por completo del daño recibido (PENALTY_ANIMAL_DAMAGE_K también cubre el
+# daño infligido por otro agente); agent_has_food no tiene castigo propio
+# hoy, pero comparte el grupo para que evolución/vida puedan aprender a
+# acercarse (robar) o evitar sin cableado a mano.
+_OTHER_SKIP_COLS = (15, 16, 17, 25, 26)  # other_dir_x, other_dir_y, other_close, agent_has_spear, agent_has_food
 # Las columnas de salida de h6/h7 (las 2 neuronas ocultas plásticas, ver
 # LEARNABLE_HIDDEN) también son plásticas en vida para TODAS las filas de
 # salida: 4/5/6 ya lo son por fila completa (arriba), así que solo hace
@@ -552,7 +561,7 @@ ANIMAL_DAMAGE = 5.0        # low on purpose: with zero hand-tuned flee/attack in
 ANIMAL_SPEED = 3.0          # cells/s; well under AGENT_SPEED so undirected wander alone
                              # has real odds of drifting out of ANIMAL_DETECT_RANGE
 ANIMAL_IS_PREDATOR = True
-ANIMAL_SPAWN_COUNT = 10
+ANIMAL_SPAWN_COUNT = 5
 ANIMAL_RESPAWN_S = 30.0     # s between respawns while population is below ANIMAL_SPAWN_COUNT (animals don't breed)
 COLOR_ANIMAL = (180, 40, 40)
 ANIMAL_RADIUS = 7           # px, draw radius

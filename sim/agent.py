@@ -268,13 +268,16 @@ class Agent:
     # -- brain signals --
 
     def _inputs(self) -> list:
-        """The 17 normalized inputs the brain reads (order matches config)."""
+        """The 19 normalized inputs the brain reads (order matches config)."""
         world = self.world
         dx, dy, dist = self._food_dir()
         food_close = 1.0 - min(dist / self.food_sense_range, 1.0) if dist is not None else 0.0
         other, odx, ody, odist = self._other_agent()
         other_close = 1.0 - min(odist / cfg.AGENT_SENSE_RANGE, 1.0) if odist is not None else 0.0
         agent_has_spear = 1.0 if (other is not None and other.inventory == cfg.CELL_SPEAR) else 0.0
+        agent_has_food = 1.0 if (
+            other is not None and other.inventory in (cfg.CELL_RESOURCE, cfg.CELL_MEAT)
+        ) else 0.0
         _animal, adx, ady, adist = self._animal_dir()
         animal_close = 1.0 - min(adist / cfg.ANIMAL_SENSE_RANGE, 1.0) if adist is not None else 0.0
         animal_danger = 1.0 if (_animal is not None and _animal.is_predator) else 0.0
@@ -314,6 +317,11 @@ class Agent:
             # agent is carrying a spear. Reacting to it (avoid, target) is
             # learned in life, not hand-tuned (LEARNABLE_CELLS, config.py).
             agent_has_spear,
+            # Ground truth like agent_has_spear: whether the nearest other
+            # agent is carrying food (CELL_RESOURCE or CELL_MEAT) in its
+            # inventory. Reacting to it is learned in life, not hand-tuned
+            # (LEARNABLE_CELLS, config.py).
+            agent_has_food,
         ]
 
     def _food_dir(self):
@@ -391,7 +399,7 @@ class Agent:
         """Eligible to mate: alive, off cooldown, fed and rested enough.
 
         This drive lives in the body, not the brain: adding mate inputs
-        would break the 17->6->8 topology and the hand-tuned weights
+        would break the 19->8->10 topology and the hand-tuned weights
         (input 9 stays RESERVED, config.py).
         """
         return (self.alive and self._mate_cooldown <= 0.0
