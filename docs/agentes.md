@@ -208,9 +208,21 @@ soltando comida no sacia nada, luego no paga nada.
 1. **Instinto** — `grab`/`interact`/`drop` nacen con pesos pequeños
    ajustados a mano que las acercan al umbral en el contexto correcto pero
    nunca lo cruzan solas: `grab` mira `h4` (comida debajo), `interact` mira
-   `hunger` con un peso grande (compuerta de hambre nítida, alineada con el
-   cruce ~0.53 de la fila `eat`) y `h5` (llevo algo), `drop` no tiene
-   instinto ninguno.
+   `h5` (llevo algo), `drop` no tiene instinto ninguno. `interact` **no**
+   está compuertado por `hunger`: antes de madera y lanzas, `interact` solo
+   servía para comer, así que una compuerta de hambre nítida tenía sentido
+   (igual que la de la fila `eat`). Ahora `interact` también hace de
+   fabricación (madera → lanza, ver arriba), algo que no tiene nada que ver
+   con el hambre — una compuerta lo bastante fuerte para retener comerse una
+   comida también retiene trabajar la madera, así que un agente saciado casi
+   nunca interactuaría. El instinto de `interact` es ahora simétrico al de
+   `grab` (peso 1.0 sobre `h5`, mismo peso de `noise` que las demás filas
+   aprendidas); qué hacer con cada objeto —comer ahora, seguir llevando,
+   trabajar la madera— lo decide el refuerzo en vida (`interact` sigue en
+   `LEARNABLE_OUTPUTS`): `REWARD_EAT_K` ya enseña a comer con hambre, y la
+   traza de elegibilidad puede acreditar un `interact` de fabricación cuando
+   la lanza resultante paga más tarde en combate, igual que ya acredita un
+   `grab` por una comida que se come segundos después.
 2. **Exploración** — las tres filas tienen peso sobre la entrada `noise`
    ("balbuceo motor"): la acción se dispara de vez en cuando y por tanto
    puede ser reforzada. Es autolimitante, porque el peso del ruido es un

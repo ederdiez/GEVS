@@ -285,20 +285,29 @@ BRAIN_B_HIDDEN = [-2.0, -2.0, 0.70, -0.50, -0.20, -0.50, 0.0, 0.0]
 #                    grabbing while satiated is the interesting behavior
 #                    (carrying a spare meal), and hunger gates the *eating*
 #                    of it through the interact row below.
-#   interact:        use whatever is in the one-slot inventory — for food
+#   interact:        use whatever is in the one-slot inventory — dispatched
+#                    by item type (_INVENTORY_ACTIONS, agent.py): for food
 #                    that means eating it (same eat_timer state machine as
-#                    eating off the ground, see agent.py); other future
-#                    carryable items each define their own interact
-#                    behavior, dispatched by item type. Instinct: +6.0 on
-#                    hunger (col 6) and +0.5 on h5 (carrying, 0.5 when the
-#                    inventory is full). The big hunger weight makes this a
-#                    sharp hunger gate, deliberately lined up with the eat
-#                    row's ~0.53 crossing: with bias -6.9 the rate is ~0 below
-#                    hunger 0.5, ~2% at 0.55, ~32% at 0.7 and ~92% at 1.0.
-#                    So a carried meal is kept until hunger actually calls
-#                    for it — that is the behavior worth having. Like the eat
-#                    row, the 6.0 weight is also drift margin: a mutation of
-#                    ±0.2 shifts the hunger crossing by only ±0.03.
+#                    eating off the ground); for wood, one step toward
+#                    crafting a spear; other future carryable items define
+#                    their own behavior the same way. NOT hunger-gated:
+#                    interact used to be food-only, so gating the row hard on
+#                    hunger (a large instinct weight, mirroring eat's) made
+#                    sense; now the row is shared with crafting, which has
+#                    nothing to do with hunger, and a hunger gate strong
+#                    enough to hold back eating a satiating meal also holds
+#                    back working wood into a spear, almost forever, since an
+#                    agent that isn't hungry would then barely ever interact.
+#                    Instinct is now just +1.0 on h5 (carrying — 0.5 when the
+#                    inventory is full, same shape as grab's h4), same scale
+#                    as the noise/exploration weight; whether to eat now vs.
+#                    keep carrying, or which item is worth acting on, is left
+#                    entirely to reinforcement (row 5 is in LEARNABLE_OUTPUTS):
+#                    REWARD_EAT_K already teaches "interact when hungry and
+#                    carrying food", and the eligibility trace can credit an
+#                    interact that led toward a later reward (a kill, once
+#                    armed) the same way it already credits grab for a meal
+#                    eaten seconds later.
 #   attack:          strike the current target (see target_animal/
 #                    target_agent below) if it's within 1 cell (agent.py).
 #                    No instinct at all — pure exploration at a deliberately
@@ -337,7 +346,7 @@ BRAIN_W_OUT = [
     [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,  20.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # eat
     [0.0, 0.0, 8.0, 8.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # rest
     [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # grab
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0,  6.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # interact
+    [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # interact
     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # drop
     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # attack
     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # target_animal
@@ -353,11 +362,11 @@ BRAIN_W_OUT = [
 # eat bias: -10.5 pairs with the 20.0 hunger skip (see the eat comment
 # above). grab/interact/drop/attack/target_* biases set the exploration
 # floor of each learned row against its noise weight (see the block comment
-# above BRAIN_W_OUT for the firing-rate arithmetic): -3.36 -> grab babbles
-# ~1.5% of ticks, -6.9 -> interact is a sharp hunger gate crossing near
-# 0.55, -3.40 -> drop, attack, target_animal and target_agent each babble
-# ~0.05% of ticks.
-BRAIN_B_OUT = [0.5, 0.5, -10.5, -1.0, -3.36, -6.9, -3.40, -3.40, -3.40, -3.40]
+# above BRAIN_W_OUT for the firing-rate arithmetic): -3.36 -> grab and
+# interact each babble ~1.5% of ticks with nothing to act on and ~18-28% of
+# ticks while carrying (h4/h5 close the gap), -3.40 -> drop, attack,
+# target_animal and target_agent each babble ~0.05% of ticks.
+BRAIN_B_OUT = [0.5, 0.5, -10.5, -1.0, -3.36, -3.36, -3.40, -3.40, -3.40, -3.40]
 
 # Output thresholds: above these, the body acts on the intention.
 EAT_OUTPUT_THRESHOLD = 0.5

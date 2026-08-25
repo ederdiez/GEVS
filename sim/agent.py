@@ -76,9 +76,6 @@ def _interact_resource(agent) -> bool:
     machine used for eating straight off the ground (Agent.update), just
     without needing to stand on a food cell."""
 
-    # MAS ADELANTE DEBE SER CAMBIADO PARA INTERACTUAR CON CUALQUIER OBJETO, NO SOLLO COMIDA.
-    # ESTA FUCION AHORA SOLO PERMITE COMER.
-    #
     # The inventory meal only counts as foresight — and only earns the
     # reward multiplier — if the food was actually carried for a while.
     # grab and interact are evaluated in the same tick, so without the
