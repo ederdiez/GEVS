@@ -1,41 +1,76 @@
-# GEVS IA — Simulación de Sociedades Inteligentes
+# GEVS IA
 
-Simulación visual de sociedades inteligentes construida con **Python +
-pygame**. El objetivo a largo plazo es simular agentes que interactúan entre
-sí y forman estructuras sociales emergentes.
+Una simulación visual de sociedades inteligentes hecha con Python y
+pygame. La idea de fondo es sencilla: meter en un mundo a unos individuos
+que no siguen ningún guion, dejar que cada uno tome sus propias decisiones
+con su propio cerebro, y ver si de todo ese lío acaban saliendo cosas que
+parecen sociedad: grupos, jerarquías, cooperación, peleas...
 
-**Estado actual:** mundo 2D **toroidal** (sin bordes: los extremos
-envuelven) en vista top-down (rocas, madera y recursos generados por
-semilla fija), ciclo día/noche con iluminación variable (HUD con hora y
-población) y agentes cuyo comportamiento completo sale de una red
-neuronal **propia por individuo** (cada agente tiene su genoma: pesos de
-la red + rasgos físicos hereditarios). Además de la herencia, cada agente
-**aprende en vida** (RL Hebbiano al recoger comida) sin tocar su genoma:
-lo aprendido no se hereda. Deambulan, comen con hambre, duermen de noche,
-se apartan al encontrarse y pueden recoger comida en un inventario de una
-ranura (punto sobre la cabeza mientras la llevan). **Nacen, se reproducen
-y mueren**: dos agentes con energía suficiente y a distancia corta se
-aparean (crossover + mutación del genoma); el hambre, el agotamiento o la
-vejez los matan, y la población fluctúa bajo un tope de seguridad. Un
-clic sobre un agente abre una segunda ventana con su red neuronal en
-vivo.
+Cada individuo es único: tiene su propio cerebro (una red neuronal
+pequeña, unas decenas de conexiones) y su propio cuerpo con rasgos
+heredados de sus padres. Nadie les dice qué hacer; deambulan, tienen
+hambre, sueño y curiosidad, y las consecuencias de sus actos les enseñan
+en vida. Y como también se reproducen y se mueren, la evolución hace de
+las suyas sobre lo que cada generación aprende a hacer bien.
 
-Leyenda de colores de los agentes:
+## Qué se ve hoy al ejecutarla
 
-| Color | Estado |
-| ----- | ------ |
-| 🟢 verde   | comiendo |
-| 🔵 azul    | descansando / durmiendo |
-| 🟠 naranja | activo y con hambre |
-| 🟣 magenta | en cooldown de apareamiento (recién apareado o recién nacido) |
-| ⚪ gris    | activo, sin hambre |
+Un mundo 2D que se envuelve sobre sí mismo (si cruzas un borde apareces
+en el contrario), con día y noche que cambian la iluminación, y un
+terreno generado por semilla fija: la misma semilla produce siempre el
+mismo mundo. Ahí dentro viven los agentes, que:
 
-## Requisitos
+- comen, duermen de noche y buscan recursos cuando tienen hambre;
+- pueden recoger comida, madera o herramientas del suelo y llevarlas
+  consigo (una cosa a la vez);
+- se pelean entre ellos y con los depredadores, y un agente armado con
+  una lanza pega más fuerte;
+- se reproducen por encuentro: dos individuos con energía suficiente se
+  aparean y su cría hereda una mezcla de los genomas de ambos, con
+  pequeñas mutaciones;
+- mueren de hambre, de agotamiento, de vejez o a manos de otro; la
+  población total está limitada para que el mundo no se desborde;
+- y lo más interesante: **aprenden durante su vida**. Cada agente ajusta
+  su propio cerebro según los resultados que obtiene (un premio interno
+  cuando el hambre se le calma, cuando escapa de un peligro, cuando gana
+  una pelea...). Ese aprendizaje es personal: lo que uno aprende no pasa
+  a sus hijos, solo lo que trae en los genes.
 
-- Python 3.12+
-- pygame (ver `requirements.txt`)
+El comportamiento completo de un agente sale de su red neuronal: la red
+propone y el cuerpo decide, de forma que un cerebro mal entrenado nunca
+puede romper la simulación (no puede atravesar rocas, ni comer donde no
+hay, ni robarle el sitio a otro). El cuerpo es lo que garantiza que las
+reglas del mundo se cumplen siempre.
 
-## Ejecutar
+## Controles
+
+| Entrada | Acción |
+| --- | --- |
+| Rueda del ratón | Zoom sobre el cursor |
+| WASD o flechas | Mover la cámara |
+| Clic izquierdo | Seleccionar un agente |
+| `+` / `-` | Acelerar / ralentizar la simulación |
+
+Al hacer clic sobre un agente se abre una segunda ventana con su cerebro
+en vivo: se ve cómo se iluminan las neuronas y qué está decidiendo en
+cada momento.
+
+## Cómo leer a los individuos por su color
+
+| Color | Significado |
+| --- | --- |
+| <span style="color:gray">gris</span> | Activo y sin hambre |
+| <span style="color:orange">naranja</span> | Activo y con hambre |
+| <span style="color:#48be78">verde</span> | Comiendo |
+| <span style="color:#5c84e2">azul</span> | Descansando o durmiendo |
+| <span style="color:#d65ec2">magenta</span> | En periodo de espera tras aparearse o nacer |
+| <span style="color:#b42828">rojo</span> | Un depredador, no un agente |
+| <span style="color:#ffe05a">amarillo</span> | Anillo que marca al agente seleccionado |
+
+## Requisitos e instalación
+
+Python 3.12 o superior. El resto es mínimo: `pygame` y `numpy`
+(`requirements.txt`).
 
 ```bash
 python3 -m venv .venv
@@ -43,16 +78,30 @@ python3 -m venv .venv
 .venv/bin/python main.py
 ```
 
-## Documentación
+La simulación corre a 60 FPS y cada día simulado dura 60 segundos
+reales. El ritmo se puede cambiar en marcha con `+` y `-`.
 
-Toda la documentación vive en [`docs/`](docs/index.md):
+## Un poco de arquitectura, para quien quiera trastear
 
-| Documento | Contenido |
-| --------- | --------- |
-| [Índice](docs/index.md) | Visión, estado actual y hoja de ruta. |
-| [Guía de inicio](docs/guia_inicio.md) | Instalación y ejecución. |
-| [Arquitectura](docs/arquitectura.md) | Mapa de módulos y cómo editar el código. |
-| [Mundo](docs/mundo.md) | Grid, reloj y API del mundo. |
-| [Agentes](docs/agentes.md) | Cerebro NN, cuerpo y evitación de choques. |
-| [Genética](docs/genetica.md) | Genoma, reproducción y muerte. |
-| [Dibujo](docs/dibujo.md) | Capas de dibujo y HUD. |
+El código vive en `sim/`, separado por responsabilidades: el mundo y sus
+reglas (`world.py`), el cuerpo de los agentes (`agent.py`), el cerebro
+(`brain.py`), la genética (`genetics.py`), el dibujado (`drawing.py`) y
+el bucle principal (`loop.py`). Todo lo que se pueda ajustar —tamaños,
+colores, ritmos, umbrales, incluso las matrices de pesos iniciales del
+cerebro— está concentrado en `sim/config.py`, sin números mágicos
+sueltos por el código.
+
+Dos decisiones que conviene conocer antes de tocar nada:
+
+- **Determinismo.** Todo el azar del programa sale de una semilla
+  (configurable). Misma semilla, misma trayectoria evolutiva. Si algo
+  usa aleatoriedad, debe usar el generador del mundo, no el `random` de
+  Python.
+- **El cerebro propone, el cuerpo ejecuta.** Las nuevas conductas se
+  añaden como intención de la red (una salida nueva, o una percepción
+  nueva como entrada), y es el cuerpo quien decide qué se permite
+  físicamente. Así la evolución nunca rompe la simulación.
+
+La documentación completa y detallada vive en [`docs/`](docs/index.md):
+cómo funciona el mundo, cada módulo, y cómo añadir cosas nuevas sin
+cargarte lo que ya hay.
