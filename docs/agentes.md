@@ -376,7 +376,9 @@ evitado por no ser mordido en primer lugar.
 
 Densidad y presión ajustables en `config.py` `# --- Animals (predators)
 ---`: bajarlas si la población se extingue, subirlas si nunca hay presión
-real. Los animales no se reproducen — `ANIMAL_RESPAWN_S` repone bajas
+real. Los primeros depredadores aparecen en el día `ANIMAL_SPAWN_DAY`
+(15 por defecto), para dejar que las primeras generaciones se asienten sin
+presión. Los animales no se reproducen — `ANIMAL_RESPAWN_S` repone bajas
 cuando la cuenta cae por debajo de `ANIMAL_SPAWN_COUNT`.
 
 ## Interacción entre agentes

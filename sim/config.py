@@ -578,6 +578,7 @@ ANIMAL_DAMAGE = 5.0        # low on purpose: with zero hand-tuned flee/attack in
 ANIMAL_SPEED = 3.0          # cells/s; well under AGENT_SPEED so undirected wander alone
                              # has real odds of drifting out of ANIMAL_DETECT_RANGE
 ANIMAL_IS_PREDATOR = True
+ANIMAL_SPAWN_DAY = 15       # simulated day the first predators appear (no animals before)
 ANIMAL_SPAWN_COUNT = 5
 ANIMAL_RESPAWN_S = 30.0     # s between respawns while population is below ANIMAL_SPAWN_COUNT (animals don't breed)
 COLOR_ANIMAL = (180, 40, 40)

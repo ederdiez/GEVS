@@ -67,6 +67,7 @@ class World:
         # --- animals (predators; scripted, no genome) ---
         self.animals = []
         self.pending_animal_deaths = []
+        self._animals_started = False
         self._animal_respawn_timer = cfg.ANIMAL_RESPAWN_S
 
         self._spawn_agents()
@@ -130,7 +131,11 @@ class World:
 
     def _spawn_animals(self) -> None:
         """Place ANIMAL_SPAWN_COUNT animals on distinct walkable cells.
-        Mirrors _spawn_agents; animals don't claim a cell in `occupied`."""
+        Mirrors _spawn_agents; animals don't claim a cell in `occupied`.
+        No animals before ANIMAL_SPAWN_DAY."""
+        if self.day < cfg.ANIMAL_SPAWN_DAY:
+            return
+        self._animals_started = True
         spots = [(x, y) for y in range(self.rows) for x in range(self.cols)
                  if self.is_walkable(x, y)]
         self.rng.shuffle(spots)
@@ -161,7 +166,10 @@ class World:
             self.day += 1
             self.time_sim %= cfg.DAY_LENGTH_S
         self._update_regrowth(dt)
-        self._update_animal_respawn(dt)
+        if not self._animals_started:
+            self._spawn_animals()
+        else:
+            self._update_animal_respawn(dt)
 
     def _update_animal_respawn(self, dt: float) -> None:
         """Animals don't breed, so replace losses on a timer or predator
